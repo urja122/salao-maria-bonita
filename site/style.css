@@ -1,0 +1,185 @@
+/* ============================================================
+   Salão Maria Bonita — estilo PRETO com DOURADO (mobile e PC)
+   ============================================================ */
+:root{
+  --gold:#c9a227;          /* dourado principal */
+  --gold-2:#e6cf7a;        /* dourado claro (textos/realces) */
+  --gold-dark:#a5821c;     /* dourado escuro (hover) */
+  --gold-soft:rgba(201,162,39,.14);
+  --gold-borda:rgba(201,162,39,.35);
+
+  --preto:#0d0d0d;         /* fundo da pagina */
+  --painel:#1a1a1a;        /* cartoes / blocos */
+  --painel-2:#242424;      /* inputs / secundario */
+  --borda:#332f22;
+  --texto:#f2efe6;         /* texto claro */
+  --texto-fraco:#b7b2a3;   /* texto apagado */
+
+  --verde:#5cb85c;
+  --verde-bg:rgba(92,184,92,.16);
+  --amarelo:#e0b64a;
+  --amarelo-bg:rgba(224,182,74,.16);
+  --azul:#5aa9e6;
+  --azul-bg:rgba(90,169,230,.16);
+  --vermelho:#e06666;
+
+  --sombra:0 4px 18px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  margin:0;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  color:var(--texto);background:var(--preto);line-height:1.4;
+}
+h1,h2{margin:0 0 .4rem}
+.oculto{display:none !important}
+
+/* ---------- Telas ---------- */
+.tela{display:none}
+.tela.ativa{display:block}
+.conteudo{display:none;max-width:1000px;margin:0 auto;padding:14px}
+.conteudo.ativa{display:block}
+
+/* ---------- Login ---------- */
+#tela-login{min-height:100vh;display:none;align-items:center;justify-content:center;
+  background:radial-gradient(120% 120% at 50% 0%,#3a2e0c 0%,#141414 45%,#000 100%);padding:18px}
+#tela-login.ativa{display:flex}
+.cartao-login{background:#161616;border:1px solid var(--gold-borda);border-radius:18px;
+  padding:30px 24px;width:100%;max-width:360px;box-shadow:0 12px 44px rgba(0,0,0,.6);text-align:center}
+.logo-img{width:140px;height:auto;margin:0 auto 6px;display:block;border-radius:14px;
+  border:1px solid var(--gold-borda);box-shadow:0 6px 20px rgba(0,0,0,.55)}
+.cartao-login h1{color:var(--gold-2);font-size:1.5rem;margin-top:8px;letter-spacing:.4px}
+.cartao-login .sub{color:var(--texto-fraco);margin:0 0 18px}
+.cartao-login label{display:block;text-align:left;font-size:.82rem;color:var(--texto-fraco);margin:10px 0 4px}
+.cartao-login input{width:100%}
+
+/* ---------- Cabeçalho ---------- */
+#topo{display:flex;align-items:center;justify-content:space-between;
+  background:#111;border-bottom:1px solid var(--gold-borda);color:var(--gold-2);
+  padding:10px 16px;box-shadow:var(--sombra);position:sticky;top:0;z-index:20}
+.topo-info{display:flex;align-items:center;gap:12px}
+.topo-logo{height:44px;width:auto;border-radius:8px;border:1px solid var(--gold-borda)}
+.topo-usuario{font-size:.82rem;color:var(--texto-fraco)}
+.btn-sair{background:var(--gold-soft);color:var(--gold-2);border:1px solid var(--gold-borda);
+  padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer}
+.btn-sair:hover{background:rgba(201,162,39,.25)}
+
+/* ---------- Formulários / campos ---------- */
+input,select{width:100%;padding:11px 12px;border:1px solid var(--borda);border-radius:10px;
+  font-size:1rem;background:var(--painel-2);color:var(--texto)}
+input::placeholder{color:#7d7a70}
+input:focus,select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-soft)}
+select option{background:var(--painel-2);color:var(--texto)}
+label{font-size:.85rem;color:var(--texto-fraco);display:block;margin:10px 0 4px}
+button{font-family:inherit}
+.btn-principal{width:100%;margin-top:16px;background:linear-gradient(180deg,var(--gold-2),var(--gold));
+  color:#1a1509;border:none;padding:13px;border-radius:10px;font-size:1rem;font-weight:800;cursor:pointer}
+.btn-principal:hover{background:linear-gradient(180deg,var(--gold),var(--gold-dark))}
+.btn-secundario{background:var(--painel-2);border:1px solid var(--gold-borda);padding:9px 12px;
+  border-radius:8px;cursor:pointer;font-weight:600;color:var(--gold-2);white-space:nowrap}
+.btn-secundario:hover{background:var(--gold-soft)}
+
+.opcoes-pagamento{display:flex;gap:8px;margin-top:4px}
+.opcao{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+  border:1px solid var(--borda);border-radius:10px;padding:10px;cursor:pointer;
+  font-size:.92rem;background:var(--painel-2);margin:0;color:var(--texto)}
+.opcao input{width:auto}
+.opcao:has(input:checked){border-color:var(--gold);background:var(--gold-soft);color:var(--gold-2);font-weight:700}
+
+.previa{margin-top:10px;max-width:100%;max-height:180px;border-radius:10px;border:1px solid var(--borda)}
+.erro{color:var(--vermelho);font-size:.88rem;margin:10px 0 0;min-height:1em}
+.msg{font-size:.88rem;margin:10px 0 0;min-height:1em}
+.msg.ok{color:var(--verde)}
+.msg.ruim{color:var(--vermelho)}
+.dica{font-size:.82rem;color:var(--texto-fraco);background:var(--gold-soft);
+  border:1px solid var(--gold-borda);padding:9px 11px;border-radius:8px;margin:6px 0 12px}
+
+/* ---------- Blocos e grade ---------- */
+.grade{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.bloco{background:var(--painel);border:1px solid var(--borda);border-radius:14px;padding:18px;box-shadow:var(--sombra)}
+.bloco h2{color:var(--gold-2);font-size:1.15rem}
+
+/* ---------- Resumo funcionária ---------- */
+.resumo-func{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.chip{flex:1;min-width:130px;background:var(--verde-bg);border:1px solid rgba(92,184,92,.35);
+  border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.chip span{font-size:.78rem;color:var(--texto-fraco)}
+.chip strong{font-size:1.3rem;color:var(--verde)}
+.chip-cartao{background:var(--amarelo-bg);border-color:rgba(224,182,74,.4)}
+.chip-cartao strong{color:var(--amarelo)}
+.chip-total{background:var(--gold-soft);border-color:var(--gold-borda);margin-bottom:12px}
+.chip-total strong{color:var(--gold-2)}
+.chip-lucro{background:var(--gold-soft);border-color:var(--gold-borda);margin-bottom:12px}
+.chip-lucro strong{color:var(--gold-2)}
+
+/* ---------- Listas de lançamentos ---------- */
+.lista{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.item{border:1px solid var(--borda);border-radius:10px;padding:10px 12px;display:flex;
+  align-items:center;gap:10px;background:var(--painel-2)}
+.item .item-info{flex:1;min-width:0}
+.item .item-desc{font-weight:600;font-size:.95rem;color:var(--texto)}
+.item .item-sub{font-size:.78rem;color:var(--texto-fraco)}
+.item .item-valor{font-weight:700;white-space:nowrap;color:var(--gold-2)}
+.tag{display:inline-block;font-size:.7rem;padding:2px 7px;border-radius:20px;font-weight:700;vertical-align:middle}
+.tag-pix{background:var(--azul-bg);color:var(--azul)}
+.tag-dinheiro{background:var(--verde-bg);color:var(--verde)}
+.tag-cartao{background:var(--amarelo-bg);color:var(--amarelo)}
+.tag-pago{background:var(--verde-bg);color:var(--verde)}
+.mini-foto{width:40px;height:40px;border-radius:8px;object-fit:cover;cursor:pointer;border:1px solid var(--borda);vertical-align:middle}
+.sem-foto{width:40px;height:40px;border-radius:8px;background:#2c2c2c;display:flex;
+  align-items:center;justify-content:center;color:#6b6b6b;font-size:18px}
+.link-excluir{background:none;border:none;color:var(--vermelho);cursor:pointer;font-size:.8rem;padding:4px}
+
+/* ---------- Abas do admin ---------- */
+.abas{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:4px}
+.aba{flex:0 0 auto;background:var(--painel);border:1px solid var(--borda);padding:10px 16px;border-radius:20px;
+  cursor:pointer;font-weight:600;color:var(--texto-fraco);font-size:.9rem}
+.aba.ativa{background:linear-gradient(180deg,var(--gold-2),var(--gold));color:#1a1509;border-color:var(--gold)}
+.painel{display:none}
+.painel.ativo{display:block}
+
+.barra-filtro{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.barra-filtro label{margin:0}
+.barra-filtro input{width:auto}
+
+.lista-cards{display:flex;flex-direction:column;gap:14px}
+.card-func{background:var(--painel);border:1px solid var(--borda);border-radius:14px;padding:16px;box-shadow:var(--sombra)}
+.card-cab{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.card-nome{font-weight:700;font-size:1.1rem;color:var(--gold-2)}
+.card-nome small{font-weight:500;color:var(--texto-fraco);font-size:.75rem}
+.card-valor-grande{font-size:1.35rem;font-weight:800;color:var(--gold-2)}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.btn-verde{background:var(--verde);color:#0d1f0d;border:none;padding:10px 14px;border-radius:9px;font-weight:800;cursor:pointer}
+.btn-verde:hover{filter:brightness(1.08)}
+.btn-cinza{background:var(--painel-2);border:1px solid var(--borda);padding:10px 14px;border-radius:9px;font-weight:600;cursor:pointer;color:var(--texto-fraco)}
+.btn-azul{background:var(--gold-soft);color:var(--gold-2);border:1px solid var(--gold-borda);padding:8px 12px;border-radius:9px;font-weight:600;cursor:pointer;font-size:.85rem}
+.btn-azul:hover{background:rgba(201,162,39,.25)}
+.btn-vermelho{background:transparent;color:var(--vermelho);border:1px solid rgba(224,102,102,.5);padding:8px 12px;border-radius:9px;font-weight:600;cursor:pointer;font-size:.85rem}
+.btn-vermelho:hover{background:rgba(224,102,102,.12)}
+.pago-selo{background:var(--verde-bg);color:var(--verde);padding:6px 12px;border-radius:20px;font-weight:700;font-size:.85rem}
+.vazio{text-align:center;color:var(--texto-fraco);padding:30px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:12px}
+
+.form-inline{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.form-inline input,.form-inline select{width:auto;flex:1;min-width:120px}
+.form-inline .btn-principal{width:auto;margin-top:0;padding:11px 18px}
+
+.linha-detalhe{display:flex;justify-content:space-between;gap:10px;font-size:.9rem;padding:6px 0;border-bottom:1px dashed var(--borda);color:var(--texto)}
+.linha-detalhe:last-child{border-bottom:none}
+.linha-detalhe strong{color:var(--gold-2)}
+.info-funcionaria{display:flex;flex-direction:column;gap:2px}
+.info-funcionaria .card-nome{font-size:1.05rem}
+.badge-tipo{font-size:.72rem;padding:2px 8px;border-radius:20px;background:var(--gold-soft);color:var(--gold-2);border:1px solid var(--gold-borda);font-weight:700}
+.badge-manicure{background:var(--gold-soft);color:var(--gold-2)}
+
+/* ---------- Modal foto ---------- */
+.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-fundo{position:absolute;inset:0;background:rgba(0,0,0,.85)}
+.modal-caixa{position:relative;max-width:92vw;max-height:88vh}
+.modal-caixa img{max-width:92vw;max-height:88vh;border-radius:10px;display:block;border:1px solid var(--gold-borda)}
+.modal-fechar{position:absolute;top:-14px;right:-14px;background:var(--gold);border:none;width:36px;height:36px;
+  border-radius:50%;font-size:16px;cursor:pointer;box-shadow:var(--sombra);color:#1a1509;font-weight:800}
+
+/* ---------- Celular ---------- */
+@media (max-width:720px){
+  .grade{grid-template-columns:1fr}
+  .card-valor-grande{font-size:1.2rem}
+}

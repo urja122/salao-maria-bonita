@@ -1,0 +1,10 @@
+# Configuração do Netlify — Salão Maria Bonita
+[build]
+  publish = "site"
+  functions = "netlify/functions"
+
+# Faz o site chamar /api/... e o Netlify direcionar para a função
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200

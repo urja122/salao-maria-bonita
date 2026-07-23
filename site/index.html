@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Empresa 1 — Conferência de Serviços</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ============ TELA DE LOGIN ============ -->
+  <section id="tela-login" class="tela ativa">
+    <div class="cartao-login">
+      <img class="logo-img" src="logo.png" alt="Salão Maria Bonita" onerror="this.style.display='none'" />
+      <h1>Salão Maria Bonita</h1>
+      <p class="sub">Conferência de serviços</p>
+      <form id="form-login">
+        <label>Nome de usuário</label>
+        <select id="login-nome" required>
+          <option value="" disabled selected>Selecione seu nome</option>
+        </select>
+        <label>Senha</label>
+        <input id="login-senha" type="password" autocomplete="current-password" placeholder="Sua senha" required />
+        <button type="submit" class="btn-principal">Entrar</button>
+        <p id="login-erro" class="erro"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ CABEÇALHO (aparece depois de logar) ============ -->
+  <header id="topo" class="oculto">
+    <div class="topo-info">
+      <img class="topo-logo" src="logo.png" alt="Salão Maria Bonita" onerror="this.style.display='none'" />
+      <span id="topo-usuario" class="topo-usuario"></span>
+    </div>
+    <button id="btn-sair" class="btn-sair">Sair</button>
+  </header>
+
+  <!-- ============ PAINEL DA FUNCIONÁRIA ============ -->
+  <section id="tela-funcionaria" class="tela conteudo">
+    <div class="grade">
+      <div class="bloco">
+        <h2>Lançar serviço</h2>
+        <form id="form-servico">
+          <label>Descrição do serviço</label>
+          <input id="serv-descricao" type="text" placeholder="Ex.: Esmaltação em gel" required />
+
+          <label>Valor cobrado (R$)</label>
+          <input id="serv-valor" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00" required />
+
+          <label>Forma de pagamento</label>
+          <div class="opcoes-pagamento">
+            <label class="opcao"><input type="radio" name="forma" value="pix" checked /> Pix</label>
+            <label class="opcao"><input type="radio" name="forma" value="dinheiro" /> Dinheiro</label>
+            <label class="opcao"><input type="radio" name="forma" value="cartao" /> Cartão</label>
+          </div>
+
+          <label>Foto do comprovante</label>
+          <input id="serv-foto" type="file" accept="image/*" capture="environment" />
+          <img id="serv-previa" class="previa oculto" alt="prévia do comprovante" />
+
+          <button type="submit" class="btn-principal">Salvar serviço</button>
+          <p id="serv-msg" class="msg"></p>
+        </form>
+      </div>
+
+      <div class="bloco">
+        <h2>Meu dia</h2>
+        <div class="resumo-func">
+          <div class="chip"><span>A receber hoje</span><strong id="func-receber">R$ 0,00</strong></div>
+          <div class="chip chip-cartao"><span>Cartão acumulado</span><strong id="func-cartao">R$ 0,00</strong></div>
+        </div>
+        <p class="dica">O valor do cartão vai acumulando e só é pago quando você juntar para sacar de uma vez.</p>
+        <div id="func-lista" class="lista"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PAINEL DO ADMINISTRADOR ============ -->
+  <section id="tela-admin" class="tela conteudo">
+    <nav class="abas">
+      <button class="aba ativa" data-aba="pagamentos">Pagamentos do dia</button>
+      <button class="aba" data-aba="cartao">Cartão acumulado</button>
+      <button class="aba" data-aba="lucro">Meu lucro</button>
+      <button class="aba" data-aba="backup">Backup</button>
+      <button class="aba" data-aba="funcionarias">Funcionárias</button>
+    </nav>
+
+    <!-- Aba: pagamentos do dia -->
+    <div id="painel-pagamentos" class="painel ativo">
+      <div class="barra-filtro">
+        <label>Dia:</label>
+        <input id="adm-data" type="date" />
+        <button id="adm-hoje" class="btn-secundario">Hoje</button>
+      </div>
+      <div class="chip chip-total"><span>Total a pagar neste dia (Pix + Dinheiro)</span><strong id="adm-total-dia">R$ 0,00</strong></div>
+      <div id="adm-pagamentos" class="lista-cards"></div>
+    </div>
+
+    <!-- Aba: cartão acumulado -->
+    <div id="painel-cartao" class="painel">
+      <p class="dica">Valores de cartão que ainda não foram pagos. Eles acumulam até a funcionária juntar para sacar. O líquido já desconta os 10% da maquineta.</p>
+      <div id="adm-cartao" class="lista-cards"></div>
+    </div>
+
+    <!-- Aba: meu lucro -->
+    <div id="painel-lucro" class="painel">
+      <div class="barra-filtro">
+        <label>De:</label> <input id="lucro-de" type="date" />
+        <label>Até:</label> <input id="lucro-ate" type="date" />
+        <button id="lucro-hoje" class="btn-secundario">Hoje</button>
+        <button id="lucro-mes" class="btn-secundario">Este mês</button>
+      </div>
+      <div class="chip chip-lucro"><span>Meu lucro de comissão no período</span><strong id="lucro-total">R$ 0,00</strong></div>
+      <div id="adm-lucro" class="lista-cards"></div>
+    </div>
+
+    <!-- Aba: backup -->
+    <div id="painel-backup" class="painel">
+      <div class="bloco">
+        <h2>Backup das contas</h2>
+        <p class="dica">Baixe as contas do período e guarde no seu computador. Depois de baixar, você pode excluir os dados do site para liberar espaço.</p>
+        <div class="barra-filtro">
+          <label>De:</label> <input id="bkp-de" type="date" />
+          <label>Até:</label> <input id="bkp-ate" type="date" />
+          <button id="bkp-semana" class="btn-secundario">Últimos 7 dias</button>
+        </div>
+        <div class="acoes">
+          <button id="bkp-relatorio" class="btn-principal" style="width:auto">Baixar relatório (HTML)</button>
+          <button id="bkp-csv" class="btn-secundario">Baixar planilha (CSV)</button>
+        </div>
+      </div>
+      <div class="bloco" style="margin-top:14px;border-color:rgba(224,102,102,.4)">
+        <h2 style="color:var(--vermelho)">Excluir dados do período</h2>
+        <p class="dica">Só use depois de baixar o backup. Isso apaga os lançamentos e as fotos do período no site — não tem como desfazer.</p>
+        <button id="bkp-excluir" class="btn-vermelho">Excluir dados deste período do site</button>
+        <p id="bkp-msg" class="msg"></p>
+      </div>
+    </div>
+
+    <!-- Aba: funcionárias -->
+    <div id="painel-funcionarias" class="painel">
+      <div class="bloco">
+        <h2>Nova funcionária</h2>
+        <form id="form-nova-func" class="form-inline">
+          <input id="nf-nome" type="text" placeholder="Nome" required />
+          <input id="nf-senha" type="text" placeholder="Senha" required />
+          <select id="nf-tipo">
+            <option value="manicure">Manicure</option>
+            <option value="cabeleireira">Cabeleireira</option>
+          </select>
+          <button type="submit" class="btn-principal">Adicionar</button>
+        </form>
+        <p id="nf-msg" class="msg"></p>
+      </div>
+      <div id="adm-funcionarias" class="lista-cards"></div>
+    </div>
+  </section>
+
+  <!-- ============ VISUALIZADOR DE COMPROVANTE ============ -->
+  <div id="modal-foto" class="modal oculto">
+    <div class="modal-fundo"></div>
+    <div class="modal-caixa">
+      <button class="modal-fechar" id="modal-fechar">✕</button>
+      <img id="modal-img" alt="comprovante" />
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
