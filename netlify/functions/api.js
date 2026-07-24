@@ -141,6 +141,28 @@ exports.handler = async (event) => {
 
     if (sub === "/config" && metodo === "GET") return resp(200, CONFIG);
 
+    // ---------- RANKING DO MÊS (qualquer usuário logado) ----------
+    // Retorna SÓ a quantidade de serviços por funcionária (nunca valores).
+    // O faturamento é usado apenas como critério de desempate, no servidor.
+    if (sub === "/ranking" && metodo === "GET") {
+      const filtros = ["select=usuario_id,nome,tipo,valor"];
+      if (q.de) filtros.push(`data=gte.${q.de}`);
+      if (q.ate) filtros.push(`data=lte.${q.ate}`);
+      const rows = await sb("lancamentos?" + filtros.join("&"));
+      const mapa = {};
+      rows.forEach(r => {
+        if (r.tipo !== "manicure" && r.tipo !== "cabeleireira") return;
+        const k = r.usuario_id;
+        if (!mapa[k]) mapa[k] = { nome: r.nome, quantidade: 0, _fat: 0 };
+        mapa[k].quantidade++;
+        mapa[k]._fat += Number(r.valor) || 0;
+      });
+      const lista = Object.values(mapa)
+        .sort((a, b) => b.quantidade - a.quantidade || b._fat - a._fat)
+        .map((x, i) => ({ posicao: i + 1, nome: x.nome, quantidade: x.quantidade }));
+      return resp(200, lista);
+    }
+
     // ---------- USUÁRIOS ----------
     if (sub === "/usuarios" && metodo === "GET") {
       if (!ehGestor) return resp(403, { erro: "Sem permissão." });
@@ -225,6 +247,23 @@ exports.handler = async (event) => {
       if (q.ate) filtros.push(`data=lte.${q.ate}`);
       const rows = await sb("lancamentos?" + filtros.join("&"));
       return resp(200, rows.map(toApi));
+    }
+
+    if (sub.startsWith("/lancamentos/") && metodo === "PUT") {
+      const id = decodeURIComponent(sub.split("/").pop());
+      const l = (await sb(`lancamentos?select=*&id=eq.${id}`))[0];
+      if (!l) return resp(404, { erro: "Lançamento não encontrado." });
+      const podeEditar = ehGestor || (l.usuario_id === atual.id && !l.pago);
+      if (!podeEditar) return resp(403, { erro: "Você não pode editar este lançamento." });
+      const descricao = corpo.descricao !== undefined ? String(corpo.descricao).trim() : l.descricao;
+      const valor = corpo.valor !== undefined ? round2(corpo.valor) : Number(l.valor);
+      const forma = ["pix", "cartao", "dinheiro"].includes(corpo.forma) ? corpo.forma : l.forma;
+      if (!descricao) return resp(400, { erro: "Descreva o serviço." });
+      if (!(valor > 0)) return resp(400, { erro: "Informe um valor válido." });
+      const c = calcularComissao(l.tipo, descricao, valor);
+      const patch = { descricao, valor, forma, comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria, regra: c.regra };
+      const upd = await sb(`lancamentos?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) });
+      return resp(200, toApi(upd[0]));
     }
 
     if (sub.startsWith("/lancamentos/") && metodo === "DELETE") {
