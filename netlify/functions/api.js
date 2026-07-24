@@ -157,10 +157,14 @@ exports.handler = async (event) => {
         mapa[k].quantidade++;
         mapa[k]._fat += Number(r.valor) || 0;
       });
-      const lista = Object.values(mapa)
+      const arr = Object.values(mapa);
+      const porServicos = arr.slice()
         .sort((a, b) => b.quantidade - a.quantidade || b._fat - a._fat)
         .map((x, i) => ({ posicao: i + 1, nome: x.nome, quantidade: x.quantidade }));
-      return resp(200, lista);
+      const porFaturamento = arr.slice()
+        .sort((a, b) => b._fat - a._fat || b.quantidade - a.quantidade)
+        .map((x, i) => ({ posicao: i + 1, nome: x.nome })); // sem valores
+      return resp(200, { porServicos, porFaturamento });
     }
 
     // ---------- USUÁRIOS ----------
