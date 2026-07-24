@@ -239,6 +239,11 @@ function ligarBotoesExcluir(container, recarregar) {
 function linkEditarHtml(l) {
   return `<button class="link-editar" data-edl="${l.id}" data-desc="${escapar(l.descricao)}" data-valor="${l.valor}" data-forma="${l.forma}">editar</button>`;
 }
+
+// Mostra a "conta por trás" do valor pago: total cobrado − comissão do salão
+function contaHtml(l) {
+  return `<small class="conta">${reais(l.valor)} − ${reais(l.comissaoSalao)} · ${l.regra}</small>`;
+}
 function ligarEditar(container, recarregar) {
   container.querySelectorAll("[data-edl]").forEach(b => {
     b.addEventListener("click", async () => {
@@ -322,7 +327,7 @@ function cardPagamentoHtml(u, itens, total, tudoPago, data) {
       <span>${l.comprovante ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}">` : ""}
         ${escapar(l.descricao)} <span class="tag tag-${l.forma}">${l.forma === "pix" ? "Pix" : "Dinheiro"}</span>
         ${l.pago ? "" : linkEditarHtml(l)}</span>
-      <strong>${reais(l.valorFuncionaria)}</strong>
+      <span class="valor-conta"><strong>${reais(l.valorFuncionaria)}</strong>${contaHtml(l)}</span>
     </div>`).join("");
   const acao = tudoPago
     ? `<span class="pago-selo">✔ Pago</span>
@@ -398,7 +403,7 @@ async function carregarCartaoAcumulado() {
       <div class="linha-detalhe">
         <span>${dataBonita(l.data)} · ${escapar(l.descricao)}
           ${l.comprovante ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}">` : ""}</span>
-        <strong>${reais(l.valorFuncionaria)}</strong>
+        <span class="valor-conta"><strong>${reais(l.valorFuncionaria)}</strong>${contaHtml(l)}</span>
       </div>`).join("");
     cards.push(`<div class="card-func">
       <div class="card-cab card-toggle">
@@ -493,25 +498,27 @@ async function carregarResumoMes() {
   });
   $("#resumo-lucro-total").textContent = reais(lucroTotal);
   const cont = $("#adm-resumo");
-  const cards = [];
-  usuarios.filter(ehFuncionaria).forEach(u => {
+  const linhas = usuarios.filter(ehFuncionaria).map(u => {
     const itens = grupos[u.id] || [];
-    if (!itens.length) return;
-    const fat = itens.reduce((s, l) => s + l.valor, 0);
-    const recebido = itens.reduce((s, l) => s + l.valorFuncionaria, 0);
-    const lucro = itens.reduce((s, l) => s + l.comissaoSalao, 0);
-    cards.push(`<div class="card-func">
+    return {
+      nome: u.nome, tipo: u.tipo, qtd: itens.length,
+      fat: itens.reduce((s, l) => s + l.valor, 0),
+      recebido: itens.reduce((s, l) => s + l.valorFuncionaria, 0),
+      lucro: itens.reduce((s, l) => s + l.comissaoSalao, 0)
+    };
+  }).filter(x => x.qtd > 0)
+    .sort((a, b) => b.fat - a.fat || b.qtd - a.qtd); // maior faturamento (e serviços) primeiro
+  cont.innerHTML = linhas.length ? linhas.map((x, i) => `
+    <div class="card-func">
       <div class="card-cab">
-        <span class="card-nome">${escapar(u.nome)} <small>(${u.tipo})</small></span>
-        <span class="card-valor-grande">${reais(fat)}</span>
+        <span class="card-nome">${i + 1}º ${escapar(x.nome)} <small>(${x.tipo})</small></span>
+        <span class="card-valor-grande">${reais(x.fat)}</span>
       </div>
-      <div class="linha-detalhe"><span>Serviços no mês</span><strong>${itens.length}</strong></div>
-      <div class="linha-detalhe"><span>Faturamento</span><strong>${reais(fat)}</strong></div>
-      <div class="linha-detalhe"><span>Recebido pela funcionária</span><strong>${reais(recebido)}</strong></div>
-      <div class="linha-detalhe"><span>Lucro do salão (comissão)</span><strong>${reais(lucro)}</strong></div>
-    </div>`);
-  });
-  cont.innerHTML = cards.length ? cards.join("") :
+      <div class="linha-detalhe"><span>Serviços no mês</span><strong>${x.qtd}</strong></div>
+      <div class="linha-detalhe"><span>Faturamento</span><strong>${reais(x.fat)}</strong></div>
+      <div class="linha-detalhe"><span>Recebido pela funcionária</span><strong>${reais(x.recebido)}</strong></div>
+      <div class="linha-detalhe"><span>Lucro do salão (comissão)</span><strong>${reais(x.lucro)}</strong></div>
+    </div>`).join("") :
     '<div class="vazio">Sem serviços neste mês.</div>';
 }
 
@@ -527,16 +534,24 @@ async function carregarRankingFunc() {
   await pintarRanking($("#func-ranking"), de, ate);
 }
 async function pintarRanking(el, de, ate) {
-  let lista = [];
-  try { lista = await api(`/api/ranking?de=${de}&ate=${ate}`); } catch (e) {}
+  let d = { porServicos: [], porFaturamento: [] };
+  try { d = await api(`/api/ranking?de=${de}&ate=${ate}`); } catch (e) {}
   const medalha = p => p === 1 ? "🥇" : p === 2 ? "🥈" : p === 3 ? "🥉" : `${p}º`;
-  el.innerHTML = lista.length ? lista.map(x => `
+  const linhas = (lista, extra) => lista.length ? lista.map(x => `
     <div class="card-func rank-linha">
       <span class="rank-pos">${medalha(x.posicao)}</span>
       <span class="rank-nome">${escapar(x.nome)}</span>
-      <span class="rank-qtd">${x.quantidade} ${x.quantidade === 1 ? "serviço" : "serviços"}</span>
-    </div>`).join("") :
-    '<div class="vazio">Sem serviços lançados neste mês ainda.</div>';
+      ${extra ? `<span class="rank-qtd">${extra(x)}</span>` : ""}
+    </div>`).join("") : '<div class="vazio">Sem serviços neste mês ainda.</div>';
+  el.innerHTML = `
+    <div class="rank-grupo">
+      <h3 class="rank-titulo">🏆 Mais serviços</h3>
+      ${linhas(d.porServicos, x => `${x.quantidade} ${x.quantidade === 1 ? "serviço" : "serviços"}`)}
+    </div>
+    <div class="rank-grupo">
+      <h3 class="rank-titulo">💰 Maior faturamento</h3>
+      ${linhas(d.porFaturamento, null)}
+    </div>`;
 }
 
 // ---------- Aba: funcionárias (CRUD) ----------
