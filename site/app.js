@@ -254,6 +254,7 @@ async function carregarPagamentos() {
     '<div class="vazio">Nenhum serviço (Pix/Dinheiro) neste dia.</div>';
   ligarFotos(cont);
   ligarAcoesPagamento(cont, data);
+  ligarToggles(cont);
 }
 
 function cardPagamentoHtml(u, itens, total, tudoPago, data) {
@@ -267,14 +268,31 @@ function cardPagamentoHtml(u, itens, total, tudoPago, data) {
     ? `<span class="pago-selo">✔ Pago</span>
        <button class="btn-cinza" data-reabrir="${u.id}">Desfazer</button>`
     : `<button class="btn-verde" data-pagar="${u.id}">Marcar como pago</button>`;
+  const selo = tudoPago ? ` <span class="mini-tag-pago">✔ pago</span>` : "";
   return `<div class="card-func">
-    <div class="card-cab">
-      <span class="card-nome">${escapar(u.nome)}</span>
+    <div class="card-cab card-toggle">
+      <span class="card-nome"><span class="seta">▸</span> ${escapar(u.nome)}${selo}</span>
       <span class="card-valor-grande">${reais(total)}</span>
     </div>
-    ${linhas}
-    <div class="acoes">${acao}</div>
+    <div class="card-detalhe oculto">
+      ${linhas}
+      <div class="acoes">${acao}</div>
+    </div>
   </div>`;
+}
+
+// abre/fecha os painéis ao clicar no cabeçalho
+function ligarToggles(cont) {
+  cont.querySelectorAll(".card-toggle").forEach(cab => {
+    cab.addEventListener("click", () => {
+      const det = cab.nextElementSibling;
+      if (!det) return;
+      const abrindo = det.classList.contains("oculto");
+      det.classList.toggle("oculto");
+      const seta = cab.querySelector(".seta");
+      if (seta) seta.textContent = abrindo ? "▾" : "▸";
+    });
+  });
 }
 
 function ligarAcoesPagamento(cont, data) {
@@ -346,24 +364,43 @@ async function carregarLucro() {
   const lancs = await api(`/api/lancamentos?de=${de}&ate=${ate}`);
   const usuarios = await api("/api/usuarios");
 
-  const porFunc = {};
+  const grupos = {};
   let total = 0;
   lancs.forEach(l => {
-    porFunc[l.usuarioId] = (porFunc[l.usuarioId] || 0) + l.comissaoSalao;
+    (grupos[l.usuarioId] = grupos[l.usuarioId] || []).push(l);
     total += l.comissaoSalao;
   });
 
   $("#lucro-total").textContent = reais(total);
   const cont = $("#adm-lucro");
-  const cards = usuarios.filter(u => u.tipo !== "admin" && porFunc[u.id]).map(u => `
-    <div class="card-func">
-      <div class="card-cab">
-        <span class="card-nome">${escapar(u.nome)} <small>(${u.tipo})</small></span>
-        <span class="card-valor-grande" style="color:var(--roxo)">${reais(porFunc[u.id])}</span>
+  const cards = [];
+  usuarios.filter(u => u.tipo !== "admin").forEach(u => {
+    const itens = (grupos[u.id] || []).slice().sort((a, b) => a.data.localeCompare(b.data));
+    if (!itens.length) return;
+    const lucro = itens.reduce((s, l) => s + l.comissaoSalao, 0);
+    const fat = itens.reduce((s, l) => s + l.valor, 0);
+    const linhas = itens.map(l => `
+      <div class="linha-detalhe">
+        <span>${dataBonita(l.data)} · ${escapar(l.descricao)}
+          <span class="tag tag-${l.forma}">${l.forma === "pix" ? "Pix" : l.forma === "cartao" ? "Cartão" : "Dinheiro"}</span>
+          ${l.comprovante ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}">` : ""}</span>
+        <strong>${reais(l.comissaoSalao)}</strong>
+      </div>`).join("");
+    cards.push(`<div class="card-func">
+      <div class="card-cab card-toggle">
+        <span class="card-nome"><span class="seta">▸</span> ${escapar(u.nome)} <small>(${u.tipo})</small></span>
+        <span class="card-valor-grande">${reais(lucro)}</span>
+      </div>
+      <div class="card-detalhe oculto">
+        ${linhas}
+        <div class="linha-detalhe"><span>Faturamento dela no período</span><strong>${reais(fat)}</strong></div>
       </div>
     </div>`);
+  });
   cont.innerHTML = cards.length ? cards.join("") :
     '<div class="vazio">Sem comissões no período.</div>';
+  ligarFotos(cont);
+  ligarToggles(cont);
 }
 
 // ---------- Aba: funcionárias (CRUD) ----------

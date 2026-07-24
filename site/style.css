@@ -147,6 +147,11 @@ button{font-family:inherit}
 .card-nome{font-weight:700;font-size:1.1rem;color:var(--gold-2)}
 .card-nome small{font-weight:500;color:var(--texto-fraco);font-size:.75rem}
 .card-valor-grande{font-size:1.35rem;font-weight:800;color:var(--gold-2)}
+.card-toggle{cursor:pointer;margin-bottom:0;user-select:none}
+.card-toggle:hover .card-nome{color:#fff}
+.seta{display:inline-block;width:1em;color:var(--gold);font-size:.85em;transition:transform .15s}
+.card-detalhe{margin-top:12px}
+.mini-tag-pago{font-size:.7rem;color:var(--verde);background:var(--verde-bg);padding:2px 8px;border-radius:20px;font-weight:700}
 .acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .btn-verde{background:var(--verde);color:#0d1f0d;border:none;padding:10px 14px;border-radius:9px;font-weight:800;cursor:pointer}
 .btn-verde:hover{filter:brightness(1.08)}
