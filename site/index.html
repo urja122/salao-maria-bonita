@@ -99,7 +99,13 @@
 
     <!-- Aba: cartão acumulado -->
     <div id="painel-cartao" class="painel">
+      <div class="barra-filtro">
+        <label>De:</label> <input id="cartao-de" type="date" />
+        <label>Até:</label> <input id="cartao-ate" type="date" />
+        <button id="cartao-tudo" class="btn-secundario">Tudo</button>
+      </div>
       <p class="dica">Valores de cartão que ainda não foram pagos. Eles acumulam até a funcionária juntar para sacar. O líquido já desconta os 10% da maquineta.</p>
+      <div class="chip chip-total"><span>Total acumulado (bruto)</span><strong id="cartao-total">R$ 0,00</strong></div>
       <div id="adm-cartao" class="lista-cards"></div>
     </div>
 
