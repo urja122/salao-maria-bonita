@@ -38,6 +38,11 @@
 
   <!-- ============ PAINEL DA FUNCIONÁRIA ============ -->
   <section id="tela-funcionaria" class="tela conteudo">
+    <nav class="abas">
+      <button class="faba ativa" data-faba="hoje">Hoje</button>
+      <button class="faba" data-faba="mes">Meu mês</button>
+    </nav>
+    <div id="fpainel-hoje" class="fpainel ativo">
     <div class="grade">
       <div class="bloco">
         <h2>Lançar serviço</h2>
@@ -80,12 +85,26 @@
       <p class="dica">Classificação por número de serviços feitos no mês (só quantidade, sem valores).</p>
       <div id="func-ranking" class="lista-cards"></div>
     </div>
+    </div><!-- /fpainel-hoje -->
+
+    <div id="fpainel-mes" class="fpainel">
+      <div class="barra-filtro">
+        <label>Mês:</label> <input id="func-mes" type="month" />
+      </div>
+      <div class="resumo-func">
+        <div class="chip"><span>Já recebi no mês</span><strong id="func-mes-recebido">R$ 0,00</strong></div>
+        <div class="chip chip-cartao"><span>Falta receber (pendente)</span><strong id="func-mes-pendente">R$ 0,00</strong></div>
+      </div>
+      <p class="dica">Cada dia mostra se já foi pago ou está pendente. Dias não pagos vão acumulando até serem quitados.</p>
+      <div id="func-mes-lista" class="lista-cards"></div>
+    </div>
   </section>
 
   <!-- ============ PAINEL DO ADMINISTRADOR ============ -->
   <section id="tela-admin" class="tela conteudo">
     <nav class="abas">
       <button class="aba ativa" data-aba="pagamentos">Pagamentos do dia</button>
+      <button class="aba" data-aba="diaspagos">Dias pagos</button>
       <button class="aba" data-aba="cartao">Cartão acumulado</button>
       <button class="aba" data-aba="lucro">Meu lucro</button>
       <button class="aba" data-aba="resumo">Resumo mês</button>
@@ -101,8 +120,20 @@
         <input id="adm-data" type="date" />
         <button id="adm-hoje" class="btn-secundario">Hoje</button>
       </div>
+      <div id="alerta-pendentes" class="alerta oculto"></div>
       <div class="chip chip-total"><span>Total a pagar neste dia (Pix + Dinheiro)</span><strong id="adm-total-dia">R$ 0,00</strong></div>
       <div id="adm-pagamentos" class="lista-cards"></div>
+    </div>
+
+    <!-- Aba: dias pagos -->
+    <div id="painel-diaspagos" class="painel">
+      <div class="barra-filtro">
+        <label>De:</label> <input id="diaspagos-de" type="date" />
+        <label>Até:</label> <input id="diaspagos-ate" type="date" />
+        <button id="diaspagos-tudo" class="btn-secundario">Tudo</button>
+      </div>
+      <p class="dica">Dias já pagos, com a data e a funcionária. Vai acumulando até você fazer o backup e limpar.</p>
+      <div id="adm-diaspagos" class="lista-cards"></div>
     </div>
 
     <!-- Aba: cartão acumulado -->

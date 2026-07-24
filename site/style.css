@@ -146,6 +146,22 @@ button{font-family:inherit}
 .painel{display:none}
 .painel.ativo{display:block}
 
+/* abas da funcionária */
+.faba{flex:0 0 auto;background:var(--painel);border:1px solid var(--borda);padding:10px 16px;border-radius:20px;
+  cursor:pointer;font-weight:600;color:var(--texto-fraco);font-size:.9rem}
+.faba.ativa{background:linear-gradient(180deg,var(--gold-2),var(--gold));color:#1a1509;border-color:var(--gold)}
+.fpainel{display:none}
+.fpainel.ativo{display:block}
+
+/* aviso de dias não pagos */
+.alerta{background:rgba(224,182,74,.15);border:1px solid rgba(224,182,74,.5);color:var(--amarelo);
+  padding:12px 14px;border-radius:10px;margin-bottom:12px;font-size:.9rem}
+.alerta strong{color:var(--amarelo)}
+.pend-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.pend-chip{background:var(--amarelo-bg);border:1px solid rgba(224,182,74,.5);color:var(--amarelo);
+  padding:6px 10px;border-radius:20px;cursor:pointer;font-weight:600;font-size:.82rem}
+.pend-chip:hover{background:rgba(224,182,74,.28)}
+
 .barra-filtro{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .barra-filtro label{margin:0}
 .barra-filtro input{width:auto}

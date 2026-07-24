@@ -275,6 +275,7 @@ $$(".aba").forEach(aba => {
     $$(".painel").forEach(p => p.classList.remove("ativo"));
     $("#painel-" + alvo).classList.add("ativo");
     if (alvo === "pagamentos") carregarPagamentos();
+    if (alvo === "diaspagos") carregarDiasPagos();
     if (alvo === "cartao") carregarCartaoAcumulado();
     if (alvo === "lucro") carregarLucro();
     if (alvo === "resumo") carregarResumoMes();
@@ -319,6 +320,7 @@ async function carregarPagamentos() {
   ligarAcoesPagamento(cont, data);
   ligarEditar(cont, carregarPagamentos);
   ligarToggles(cont);
+  carregarAlertaPendentes();
 }
 
 function cardPagamentoHtml(u, itens, total, tudoPago, data) {
@@ -532,6 +534,97 @@ async function carregarRankingAdmin() {
 async function carregarRankingFunc() {
   const { de, ate } = limitesMes(mesAtual());
   await pintarRanking($("#func-ranking"), de, ate);
+}
+
+// ---------- Abas da funcionária (Hoje / Meu mês) ----------
+$$(".faba").forEach(aba => {
+  aba.addEventListener("click", () => {
+    $$(".faba").forEach(a => a.classList.remove("ativa"));
+    aba.classList.add("ativa");
+    const alvo = aba.dataset.faba;
+    document.querySelectorAll(".fpainel").forEach(p => p.classList.remove("ativo"));
+    $("#fpainel-" + alvo).classList.add("ativo");
+    if (alvo === "mes") carregarMeuMes();
+  });
+});
+$("#func-mes").addEventListener("change", carregarMeuMes);
+
+async function carregarMeuMes() {
+  if (!$("#func-mes").value) $("#func-mes").value = mesAtual();
+  const { de, ate } = limitesMes($("#func-mes").value);
+  const lancs = await api(`/api/lancamentos?de=${de}&ate=${ate}`);
+  const porDia = {};
+  let recebido = 0, pendente = 0;
+  lancs.filter(l => l.forma !== "cartao").forEach(l => {
+    const d = porDia[l.data] = porDia[l.data] || { data: l.data, total: 0, pago: true };
+    d.total += l.valorFuncionaria;
+    if (!l.pago) d.pago = false;
+    if (l.pago) recebido += l.valorFuncionaria; else pendente += l.valorFuncionaria;
+  });
+  $("#func-mes-recebido").textContent = reais(recebido);
+  $("#func-mes-pendente").textContent = reais(pendente);
+  const dias = Object.values(porDia).sort((a, b) => b.data.localeCompare(a.data));
+  const cont = $("#func-mes-lista");
+  cont.innerHTML = dias.length ? dias.map(d => `
+    <div class="card-func rank-linha">
+      <span class="rank-nome">${dataBonita(d.data)}</span>
+      <span>${d.pago
+        ? '<span class="pago-selo">✔ pago</span>'
+        : '<span class="tag" style="background:var(--amarelo-bg);color:var(--amarelo)">pendente</span>'}</span>
+      <span class="rank-qtd">${reais(d.total)}</span>
+    </div>`).join("") :
+    '<div class="vazio">Nenhum serviço neste mês.</div>';
+}
+
+// ---------- Aba: dias pagos (admin/assistente) ----------
+$("#diaspagos-de").addEventListener("change", carregarDiasPagos);
+$("#diaspagos-ate").addEventListener("change", carregarDiasPagos);
+$("#diaspagos-tudo").addEventListener("click", () => {
+  $("#diaspagos-de").value = ""; $("#diaspagos-ate").value = ""; carregarDiasPagos();
+});
+async function carregarDiasPagos() {
+  const de = $("#diaspagos-de").value, ate = $("#diaspagos-ate").value;
+  const qs = [];
+  if (de) qs.push("de=" + de);
+  if (ate) qs.push("ate=" + ate);
+  const lancs = await api("/api/lancamentos" + (qs.length ? "?" + qs.join("&") : ""));
+  const grupos = {};
+  lancs.filter(l => l.forma !== "cartao" && l.pago).forEach(l => {
+    const k = l.usuarioId + "|" + l.data;
+    (grupos[k] = grupos[k] || { data: l.data, nome: l.nome, valor: 0 }).valor += l.valorFuncionaria;
+  });
+  const lista = Object.values(grupos).sort((a, b) => b.data.localeCompare(a.data) || a.nome.localeCompare(b.nome));
+  const cont = $("#adm-diaspagos");
+  cont.innerHTML = lista.length ? lista.map(x => `
+    <div class="card-func rank-linha">
+      <span class="pago-selo">✔ pago</span>
+      <span class="rank-nome">${escapar(x.nome)} <small style="color:var(--texto-fraco)">· ${dataBonita(x.data)}</small></span>
+      <span class="rank-qtd">${reais(x.valor)}</span>
+    </div>`).join("") :
+    '<div class="vazio">Nenhum dia pago ainda.</div>';
+}
+
+// ---------- Aviso de dias anteriores não pagos ----------
+async function carregarAlertaPendentes() {
+  const el = $("#alerta-pendentes");
+  if (!el) return;
+  const hoje = hojeStr();
+  let lancs = [];
+  try { lancs = await api("/api/lancamentos"); } catch (e) { return; }
+  const grupos = {};
+  lancs.filter(l => l.forma !== "cartao" && !l.pago && l.data < hoje).forEach(l => {
+    const k = l.usuarioId + "|" + l.data;
+    (grupos[k] = grupos[k] || { data: l.data, nome: l.nome, valor: 0 }).valor += l.valorFuncionaria;
+  });
+  const lista = Object.values(grupos).sort((a, b) => a.data.localeCompare(b.data));
+  if (!lista.length) { el.classList.add("oculto"); el.innerHTML = ""; return; }
+  el.classList.remove("oculto");
+  el.innerHTML = `⚠️ <strong>Atenção:</strong> há dias anteriores não pagos. Clique para ir até o dia e pagar:
+    <div class="pend-chips">${lista.map(x =>
+      `<button class="pend-chip" data-dia="${x.data}">${escapar(x.nome)} · ${dataBonita(x.data)} · ${reais(x.valor)}</button>`).join("")}</div>`;
+  el.querySelectorAll("[data-dia]").forEach(b => b.addEventListener("click", () => {
+    $("#adm-data").value = b.dataset.dia; carregarPagamentos();
+  }));
 }
 async function pintarRanking(el, de, ate) {
   let d = { porServicos: [], porFaturamento: [] };
