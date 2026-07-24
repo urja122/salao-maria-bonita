@@ -85,19 +85,31 @@ async function entrarNoSistema() {
   } else {
     mostrarTela("funcionaria");
     await carregarMeuDia();
+    carregarRankingFunc();
   }
 }
 
 // Ajusta o que cada papel pode ver. Assistente não vê "Meu lucro".
 function ajustarPapel() {
   const assistente = USUARIO.tipo === "assistente";
-  const abaLucro = document.querySelector('.aba[data-aba="lucro"]');
-  if (abaLucro) {
-    abaLucro.classList.toggle("oculto", assistente);
-    if (assistente && abaLucro.classList.contains("ativa")) {
-      document.querySelector('.aba[data-aba="pagamentos"]').click();
+  // Assistente não vê "Meu lucro" nem "Resumo mês" (mostram lucro)
+  ["lucro", "resumo"].forEach(nome => {
+    const aba = document.querySelector(`.aba[data-aba="${nome}"]`);
+    if (aba) {
+      aba.classList.toggle("oculto", assistente);
+      if (assistente && aba.classList.contains("ativa")) {
+        document.querySelector('.aba[data-aba="pagamentos"]').click();
+      }
     }
-  }
+  });
+}
+
+// ---------- meses ----------
+function mesAtual() { return hojeStr().slice(0, 7); } // YYYY-MM
+function limitesMes(mes) {
+  const [a, m] = mes.split("-").map(Number);
+  const ultimo = new Date(a, m, 0).getDate();
+  return { de: `${mes}-01`, ate: `${mes}-${String(ultimo).padStart(2, "0")}` };
 }
 
 // ============================================================
@@ -188,6 +200,7 @@ async function carregarMeuDia() {
   }
   lista.innerHTML = doDia.map(l => itemLancamentoHtml(l, true)).join("");
   ligarBotoesExcluir(lista, carregarMeuDia);
+  ligarEditar(lista, carregarMeuDia);
   ligarFotos(lista);
 }
 
@@ -198,13 +211,15 @@ function itemLancamentoHtml(l, podeExcluir) {
     : `<div class="sem-foto">—</div>`;
   const tag = `<span class="tag tag-${l.forma}">${l.forma === "cartao" ? "Cartão" : l.forma === "pix" ? "Pix" : "Dinheiro"}</span>`;
   const pago = l.pago ? ' <span class="tag tag-pago">pago</span>' : "";
-  const excluir = podeExcluir && !l.pago
+  const podeMexer = podeExcluir && !l.pago;
+  const editar = podeMexer ? linkEditarHtml(l) : "";
+  const excluir = podeMexer
     ? `<button class="link-excluir" data-excluir="${l.id}">excluir</button>` : "";
   return `<div class="item">
     ${foto}
     <div class="item-info">
       <div class="item-desc">${escapar(l.descricao)}</div>
-      <div class="item-sub">${tag}${pago} · você recebe ${reais(l.valorFuncionaria)} ${excluir}</div>
+      <div class="item-sub">${tag}${pago} · você recebe ${reais(l.valorFuncionaria)} ${editar} ${excluir}</div>
     </div>
     <div class="item-valor">${reais(l.valor)}</div>
   </div>`;
@@ -216,6 +231,30 @@ function ligarBotoesExcluir(container, recarregar) {
       if (!confirm("Excluir este lançamento?")) return;
       try { await api("/api/lancamentos/" + b.dataset.excluir, { method: "DELETE" }); recarregar(); }
       catch (e) { alert(e.message); }
+    });
+  });
+}
+
+// ---------- editar um lançamento ----------
+function linkEditarHtml(l) {
+  return `<button class="link-editar" data-edl="${l.id}" data-desc="${escapar(l.descricao)}" data-valor="${l.valor}" data-forma="${l.forma}">editar</button>`;
+}
+function ligarEditar(container, recarregar) {
+  container.querySelectorAll("[data-edl]").forEach(b => {
+    b.addEventListener("click", async () => {
+      const desc = prompt("Descrição do serviço:", b.dataset.desc);
+      if (desc === null) return;
+      const valorStr = prompt("Valor cobrado (R$):", b.dataset.valor);
+      if (valorStr === null) return;
+      const forma = prompt('Forma de pagamento — digite "pix", "cartao" ou "dinheiro":', b.dataset.forma);
+      if (forma === null) return;
+      try {
+        await api("/api/lancamentos/" + b.dataset.edl, {
+          method: "PUT",
+          body: JSON.stringify({ descricao: desc, valor: valorStr, forma: (forma || "").trim().toLowerCase() })
+        });
+        recarregar();
+      } catch (e) { alert(e.message); }
     });
   });
 }
@@ -233,6 +272,8 @@ $$(".aba").forEach(aba => {
     if (alvo === "pagamentos") carregarPagamentos();
     if (alvo === "cartao") carregarCartaoAcumulado();
     if (alvo === "lucro") carregarLucro();
+    if (alvo === "resumo") carregarResumoMes();
+    if (alvo === "ranking") carregarRankingAdmin();
     if (alvo === "backup") iniciarBackup();
     if (alvo === "funcionarias") carregarFuncionarias();
   });
@@ -271,6 +312,7 @@ async function carregarPagamentos() {
     '<div class="vazio">Nenhum serviço (Pix/Dinheiro) neste dia.</div>';
   ligarFotos(cont);
   ligarAcoesPagamento(cont, data);
+  ligarEditar(cont, carregarPagamentos);
   ligarToggles(cont);
 }
 
@@ -278,7 +320,8 @@ function cardPagamentoHtml(u, itens, total, tudoPago, data) {
   const linhas = itens.map(l => `
     <div class="linha-detalhe">
       <span>${l.comprovante ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}">` : ""}
-        ${escapar(l.descricao)} <span class="tag tag-${l.forma}">${l.forma === "pix" ? "Pix" : "Dinheiro"}</span></span>
+        ${escapar(l.descricao)} <span class="tag tag-${l.forma}">${l.forma === "pix" ? "Pix" : "Dinheiro"}</span>
+        ${l.pago ? "" : linkEditarHtml(l)}</span>
       <strong>${reais(l.valorFuncionaria)}</strong>
     </div>`).join("");
   const acao = tudoPago
@@ -433,6 +476,67 @@ async function carregarLucro() {
     '<div class="vazio">Sem comissões no período.</div>';
   ligarFotos(cont);
   ligarToggles(cont);
+}
+
+// ---------- Aba: resumo do mês (só admin) ----------
+$("#resumo-mes").addEventListener("change", carregarResumoMes);
+async function carregarResumoMes() {
+  if (!$("#resumo-mes").value) $("#resumo-mes").value = mesAtual();
+  const { de, ate } = limitesMes($("#resumo-mes").value);
+  const lancs = await api(`/api/lancamentos?de=${de}&ate=${ate}`);
+  const usuarios = await api("/api/usuarios");
+  const grupos = {};
+  let lucroTotal = 0;
+  lancs.forEach(l => {
+    (grupos[l.usuarioId] = grupos[l.usuarioId] || []).push(l);
+    lucroTotal += l.comissaoSalao;
+  });
+  $("#resumo-lucro-total").textContent = reais(lucroTotal);
+  const cont = $("#adm-resumo");
+  const cards = [];
+  usuarios.filter(ehFuncionaria).forEach(u => {
+    const itens = grupos[u.id] || [];
+    if (!itens.length) return;
+    const fat = itens.reduce((s, l) => s + l.valor, 0);
+    const recebido = itens.reduce((s, l) => s + l.valorFuncionaria, 0);
+    const lucro = itens.reduce((s, l) => s + l.comissaoSalao, 0);
+    cards.push(`<div class="card-func">
+      <div class="card-cab">
+        <span class="card-nome">${escapar(u.nome)} <small>(${u.tipo})</small></span>
+        <span class="card-valor-grande">${reais(fat)}</span>
+      </div>
+      <div class="linha-detalhe"><span>Serviços no mês</span><strong>${itens.length}</strong></div>
+      <div class="linha-detalhe"><span>Faturamento</span><strong>${reais(fat)}</strong></div>
+      <div class="linha-detalhe"><span>Recebido pela funcionária</span><strong>${reais(recebido)}</strong></div>
+      <div class="linha-detalhe"><span>Lucro do salão (comissão)</span><strong>${reais(lucro)}</strong></div>
+    </div>`);
+  });
+  cont.innerHTML = cards.length ? cards.join("") :
+    '<div class="vazio">Sem serviços neste mês.</div>';
+}
+
+// ---------- Ranking do mês (todas veem — só quantidade, sem valores) ----------
+$("#ranking-mes").addEventListener("change", carregarRankingAdmin);
+async function carregarRankingAdmin() {
+  if (!$("#ranking-mes").value) $("#ranking-mes").value = mesAtual();
+  const { de, ate } = limitesMes($("#ranking-mes").value);
+  await pintarRanking($("#adm-ranking"), de, ate);
+}
+async function carregarRankingFunc() {
+  const { de, ate } = limitesMes(mesAtual());
+  await pintarRanking($("#func-ranking"), de, ate);
+}
+async function pintarRanking(el, de, ate) {
+  let lista = [];
+  try { lista = await api(`/api/ranking?de=${de}&ate=${ate}`); } catch (e) {}
+  const medalha = p => p === 1 ? "🥇" : p === 2 ? "🥈" : p === 3 ? "🥉" : `${p}º`;
+  el.innerHTML = lista.length ? lista.map(x => `
+    <div class="card-func rank-linha">
+      <span class="rank-pos">${medalha(x.posicao)}</span>
+      <span class="rank-nome">${escapar(x.nome)}</span>
+      <span class="rank-qtd">${x.quantidade} ${x.quantidade === 1 ? "serviço" : "serviços"}</span>
+    </div>`).join("") :
+    '<div class="vazio">Sem serviços lançados neste mês ainda.</div>';
 }
 
 // ---------- Aba: funcionárias (CRUD) ----------

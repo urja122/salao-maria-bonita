@@ -74,6 +74,12 @@
         <div id="func-lista" class="lista"></div>
       </div>
     </div>
+
+    <div class="bloco" style="margin-top:16px">
+      <h2>🏆 Ranking do mês</h2>
+      <p class="dica">Classificação por número de serviços feitos no mês (só quantidade, sem valores).</p>
+      <div id="func-ranking" class="lista-cards"></div>
+    </div>
   </section>
 
   <!-- ============ PAINEL DO ADMINISTRADOR ============ -->
@@ -82,6 +88,8 @@
       <button class="aba ativa" data-aba="pagamentos">Pagamentos do dia</button>
       <button class="aba" data-aba="cartao">Cartão acumulado</button>
       <button class="aba" data-aba="lucro">Meu lucro</button>
+      <button class="aba" data-aba="resumo">Resumo mês</button>
+      <button class="aba" data-aba="ranking">Ranking</button>
       <button class="aba" data-aba="backup">Backup</button>
       <button class="aba" data-aba="funcionarias">Funcionárias</button>
     </nav>
@@ -119,6 +127,24 @@
       </div>
       <div class="chip chip-lucro"><span>Meu lucro de comissão no período</span><strong id="lucro-total">R$ 0,00</strong></div>
       <div id="adm-lucro" class="lista-cards"></div>
+    </div>
+
+    <!-- Aba: resumo do mês (só admin) -->
+    <div id="painel-resumo" class="painel">
+      <div class="barra-filtro">
+        <label>Mês:</label> <input id="resumo-mes" type="month" />
+      </div>
+      <div class="chip chip-lucro"><span>Lucro do salão no mês</span><strong id="resumo-lucro-total">R$ 0,00</strong></div>
+      <div id="adm-resumo" class="lista-cards"></div>
+    </div>
+
+    <!-- Aba: ranking do mês (todas) -->
+    <div id="painel-ranking" class="painel">
+      <div class="barra-filtro">
+        <label>Mês:</label> <input id="ranking-mes" type="month" />
+      </div>
+      <p class="dica">Classificação por número de serviços feitos no mês. Não mostra valores.</p>
+      <div id="adm-ranking" class="lista-cards"></div>
     </div>
 
     <!-- Aba: backup -->

@@ -128,6 +128,11 @@ button{font-family:inherit}
 .sem-foto{width:40px;height:40px;border-radius:8px;background:#2c2c2c;display:flex;
   align-items:center;justify-content:center;color:#6b6b6b;font-size:18px}
 .link-excluir{background:none;border:none;color:var(--vermelho);cursor:pointer;font-size:.8rem;padding:4px}
+.link-editar{background:none;border:none;color:var(--azul);cursor:pointer;font-size:.8rem;padding:4px}
+.rank-linha{display:flex;align-items:center;gap:12px}
+.rank-pos{font-size:1.2rem;font-weight:800;min-width:2.2em;text-align:center;color:var(--gold-2)}
+.rank-nome{flex:1;font-weight:700;color:var(--texto)}
+.rank-qtd{color:var(--gold-2);font-weight:700;white-space:nowrap}
 
 /* ---------- Abas do admin ---------- */
 .abas{display:flex;gap:6px;overflow-x:auto;margin-bottom:14px;padding-bottom:4px}
