@@ -137,17 +137,18 @@ exports.handler = async (event) => {
     const atual = verificar(auth);
     if (!atual) return resp(401, { erro: "Faça login novamente." });
     const ehAdmin = atual.tipo === "admin";
+    const ehGestor = ehAdmin || atual.tipo === "assistente"; // admin ou assistente
 
     if (sub === "/config" && metodo === "GET") return resp(200, CONFIG);
 
     // ---------- USUÁRIOS ----------
     if (sub === "/usuarios" && metodo === "GET") {
-      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
       const usuarios = await sb("usuarios?select=id,nome,tipo&order=nome");
       return resp(200, usuarios);
     }
     if (sub === "/usuarios" && metodo === "POST") {
-      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
       const nome = (corpo.nome || "").trim();
       const senha = (corpo.senha || "").trim();
       const tipo = corpo.tipo === "cabeleireira" ? "cabeleireira" : "manicure";
@@ -159,10 +160,11 @@ exports.handler = async (event) => {
       return resp(200, { id: novo.id, nome: novo.nome, tipo: novo.tipo });
     }
     if (sub.startsWith("/usuarios/") && metodo === "PUT") {
-      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
       const id = decodeURIComponent(sub.split("/").pop());
       const alvo = (await sb(`usuarios?select=*&id=eq.${id}`))[0];
       if (!alvo) return resp(404, { erro: "Funcionária não encontrada." });
+      if (!ehAdmin && (alvo.tipo === "admin" || alvo.tipo === "assistente")) return resp(403, { erro: "Sem permissão para editar esta conta." });
       const patch = {};
       if (corpo.nome !== undefined && corpo.nome.trim()) patch.nome = corpo.nome.trim();
       if (corpo.senha !== undefined && corpo.senha.trim()) patch.senha = corpo.senha.trim();
@@ -171,11 +173,12 @@ exports.handler = async (event) => {
       return resp(200, { id, nome: patch.nome || alvo.nome, tipo: patch.tipo || alvo.tipo });
     }
     if (sub.startsWith("/usuarios/") && metodo === "DELETE") {
-      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
       const id = decodeURIComponent(sub.split("/").pop());
       const alvo = (await sb(`usuarios?select=*&id=eq.${id}`))[0];
       if (!alvo) return resp(404, { erro: "Funcionária não encontrada." });
       if (alvo.tipo === "admin") return resp(400, { erro: "Não é possível excluir o administrador." });
+      if (!ehAdmin && alvo.tipo === "assistente") return resp(403, { erro: "Sem permissão para excluir esta conta." });
       await sb(`usuarios?id=eq.${id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
       return resp(200, { ok: true });
     }
@@ -215,7 +218,7 @@ exports.handler = async (event) => {
 
     if (sub === "/lancamentos" && metodo === "GET") {
       const filtros = ["select=*", "order=criado_em.desc"];
-      if (!ehAdmin) filtros.push(`usuario_id=eq.${atual.id}`);
+      if (!ehGestor) filtros.push(`usuario_id=eq.${atual.id}`);
       else if (q.usuarioId) filtros.push(`usuario_id=eq.${q.usuarioId}`);
       if (q.data) filtros.push(`data=eq.${q.data}`);
       if (q.de) filtros.push(`data=gte.${q.de}`);
@@ -236,7 +239,7 @@ exports.handler = async (event) => {
 
     // ---------- PAGAR / REABRIR ----------
     if (sub === "/pagar" && metodo === "POST") {
-      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
       let filtro = `usuario_id=eq.${corpo.usuarioId}&pago=eq.false`;
       if (corpo.escopo === "dia") filtro += `&data=eq.${corpo.data}&forma=neq.cartao`;
       else if (corpo.escopo === "cartao") filtro += `&forma=eq.cartao`;
@@ -245,7 +248,7 @@ exports.handler = async (event) => {
       return resp(200, { ok: true });
     }
     if (sub === "/reabrir" && metodo === "POST") {
-      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
       let filtro = `usuario_id=eq.${corpo.usuarioId}&pago=eq.true`;
       if (corpo.escopo === "dia") filtro += `&data=eq.${corpo.data}&forma=neq.cartao`;
       else if (corpo.escopo === "cartao") filtro += `&forma=eq.cartao`;
@@ -256,7 +259,7 @@ exports.handler = async (event) => {
 
     // ---------- LIMPAR PERÍODO (backup já baixado) ----------
     if (sub === "/limpar" && metodo === "POST") {
-      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
       const de = corpo.de, ate = corpo.ate;
       if (!de || !ate) return resp(400, { erro: "Informe o período." });
       const rows = await sb(`lancamentos?select=id,comprovante&data=gte.${de}&data=lte.${ate}`);
