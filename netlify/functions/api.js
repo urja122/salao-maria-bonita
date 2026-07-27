@@ -92,6 +92,13 @@ function toApi(row) {
   };
 }
 
+function demApi(row) {
+  return {
+    id: row.id, descricao: row.descricao, status: row.status,
+    comprovante: row.comprovante, criadoEm: row.criado_em, concluidoEm: row.concluido_em
+  };
+}
+
 const resp = (code, obj) => ({
   statusCode: code,
   headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
@@ -165,6 +172,47 @@ exports.handler = async (event) => {
         .sort((a, b) => b._fat - a._fat || b.quantidade - a.quantidade)
         .map((x, i) => ({ posicao: i + 1, nome: x.nome })); // sem valores
       return resp(200, { porServicos, porFaturamento });
+    }
+
+    // ---------- DEMANDAS (admin designa, Bira conclui) ----------
+    if (sub === "/demandas" && metodo === "GET") {
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
+      const rows = await sb("demandas?select=*&order=criado_em.desc");
+      return resp(200, rows.map(demApi));
+    }
+    if (sub === "/demandas" && metodo === "POST") {
+      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      const descricao = (corpo.descricao || "").trim();
+      if (!descricao) return resp(400, { erro: "Descreva a demanda." });
+      const row = { id: novoId("d"), descricao, status: "pendente" };
+      const ins = await sb("demandas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
+      return resp(200, demApi(ins[0]));
+    }
+    if (sub.startsWith("/demandas/") && metodo === "PUT") {
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
+      const id = decodeURIComponent(sub.split("/").pop());
+      const d = (await sb(`demandas?select=*&id=eq.${id}`))[0];
+      if (!d) return resp(404, { erro: "Demanda não encontrada." });
+      const patch = {};
+      if (corpo.status === "concluida") { patch.status = "concluida"; patch.concluido_em = new Date().toISOString(); }
+      else if (corpo.status === "pendente") { patch.status = "pendente"; patch.concluido_em = null; }
+      if (corpo.comprovanteBase64) {
+        const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/.exec(corpo.comprovanteBase64);
+        if (m) {
+          const ext = "." + m[1].split("/")[1].replace("jpeg", "jpg").replace("+xml", "");
+          patch.comprovante = await sbUpload(novoId("dem") + ext, Buffer.from(m[2], "base64"), m[1]);
+        }
+      }
+      const upd = await sb(`demandas?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) });
+      return resp(200, demApi(upd[0]));
+    }
+    if (sub.startsWith("/demandas/") && metodo === "DELETE") {
+      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      const id = decodeURIComponent(sub.split("/").pop());
+      const d = (await sb(`demandas?select=*&id=eq.${id}`))[0];
+      if (d && d.comprovante) await sbDeleteObj(d.comprovante);
+      await sb(`demandas?id=eq.${id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      return resp(200, { ok: true });
     }
 
     // ---------- USUÁRIOS ----------
