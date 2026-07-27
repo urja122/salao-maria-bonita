@@ -163,6 +163,7 @@ $("#form-servico").addEventListener("submit", async (e) => {
         descricao: $("#serv-descricao").value,
         valor: $("#serv-valor").value,
         forma,
+        data: hojeStr(), // usa a data local do aparelho (corrige o fuso à noite)
         comprovanteBase64: fotoBase64
       })
     });
