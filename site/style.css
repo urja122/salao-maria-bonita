@@ -45,8 +45,7 @@ h1,h2{margin:0 0 .4rem}
 #tela-login.ativa{display:flex}
 .cartao-login{background:#161616;border:1px solid var(--gold-borda);border-radius:18px;
   padding:30px 24px;width:100%;max-width:360px;box-shadow:0 12px 44px rgba(0,0,0,.6);text-align:center}
-.logo-img{width:140px;height:auto;margin:0 auto 6px;display:block;border-radius:14px;
-  border:1px solid var(--gold-borda);box-shadow:0 6px 20px rgba(0,0,0,.55)}
+.logo-img{width:150px;height:auto;margin:0 auto 6px;display:block}
 .cartao-login h1{color:var(--gold-2);font-size:1.5rem;margin-top:8px;letter-spacing:.4px}
 .cartao-login .sub{color:var(--texto-fraco);margin:0 0 18px}
 .cartao-login label{display:block;text-align:left;font-size:.82rem;color:var(--texto-fraco);margin:10px 0 4px}
@@ -57,7 +56,7 @@ h1,h2{margin:0 0 .4rem}
   background:#111;border-bottom:1px solid var(--gold-borda);color:var(--gold-2);
   padding:10px 16px;box-shadow:var(--sombra);position:sticky;top:0;z-index:20}
 .topo-info{display:flex;align-items:center;gap:12px}
-.topo-logo{height:44px;width:auto;border-radius:8px;border:1px solid var(--gold-borda)}
+.topo-logo{height:46px;width:auto}
 .topo-usuario{font-size:.82rem;color:var(--texto-fraco)}
 .btn-sair{background:var(--gold-soft);color:var(--gold-2);border:1px solid var(--gold-borda);
   padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer}
