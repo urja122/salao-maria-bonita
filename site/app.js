@@ -13,6 +13,18 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 // quem é funcionária de fato (aparece nos painéis de pagamento/cartão/lucro)
 function ehFuncionaria(u) { return u.tipo === "manicure" || u.tipo === "cabeleireira"; }
 
+// ---------- método "compensar comissão pelo cartão" (afeta só dinheiro) ----------
+// valor que a funcionária recebe daquele lançamento
+function receberDe(l, compensa) {
+  return (compensa && l.forma === "dinheiro") ? l.valor : l.valorFuncionaria;
+}
+// comissão de dinheiro que fica "pendurada" no cartão (ainda não quitada)
+function dividaCartaoDe(lancs, compensa) {
+  if (!compensa) return 0;
+  return lancs.filter(l => l.forma === "dinheiro" && l.commQuitada === false)
+              .reduce((s, l) => s + l.comissaoSalao, 0);
+}
+
 function reais(n) {
   return "R$ " + (Number(n) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -92,8 +104,8 @@ async function entrarNoSistema() {
 // Ajusta o que cada papel pode ver. Assistente não vê "Meu lucro".
 function ajustarPapel() {
   const assistente = USUARIO.tipo === "assistente";
-  // Assistente não vê "Meu lucro" nem "Resumo mês" (mostram lucro)
-  ["lucro", "resumo"].forEach(nome => {
+  // Assistente não vê "Meu lucro", "Resumo mês" (lucro) nem "Funcionárias"
+  ["lucro", "resumo", "funcionarias"].forEach(nome => {
     const aba = document.querySelector(`.aba[data-aba="${nome}"]`);
     if (aba) {
       aba.classList.toggle("oculto", assistente);
@@ -187,12 +199,14 @@ async function carregarMeuDia() {
   const doDia = await api("/api/lancamentos?data=" + hoje);
   const cartaoTudo = await api("/api/lancamentos"); // todos os meus (para acumulado de cartão)
 
+  const compensa = !!USUARIO.compensa;
   const receberHoje = doDia
     .filter(l => l.forma !== "cartao")
-    .reduce((s, l) => s + l.valorFuncionaria, 0);
-  const cartaoAcum = cartaoTudo
+    .reduce((s, l) => s + receberDe(l, compensa), 0);
+  const cartaoBase = cartaoTudo
     .filter(l => l.forma === "cartao" && !l.pago)
     .reduce((s, l) => s + l.valorFuncionaria, 0);
+  const cartaoAcum = Math.max(0, cartaoBase - dividaCartaoDe(cartaoTudo, compensa));
 
   $("#func-receber").textContent = reais(receberHoje);
   $("#func-cartao").textContent = reais(cartaoAcum);
@@ -202,14 +216,14 @@ async function carregarMeuDia() {
     lista.innerHTML = '<div class="vazio">Nenhum serviço lançado hoje ainda.</div>';
     return;
   }
-  lista.innerHTML = doDia.map(l => itemLancamentoHtml(l, true)).join("");
+  lista.innerHTML = doDia.map(l => itemLancamentoHtml(l, true, compensa)).join("");
   ligarBotoesExcluir(lista, carregarMeuDia);
   ligarEditar(lista, carregarMeuDia);
   ligarFotos(lista);
 }
 
 // HTML de um lançamento na lista
-function itemLancamentoHtml(l, podeExcluir) {
+function itemLancamentoHtml(l, podeExcluir, compensa) {
   const foto = l.comprovante
     ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}" alt="comprovante">`
     : `<div class="sem-foto">—</div>`;
@@ -223,7 +237,7 @@ function itemLancamentoHtml(l, podeExcluir) {
     ${foto}
     <div class="item-info">
       <div class="item-desc">${escapar(l.descricao)}</div>
-      <div class="item-sub">${tag}${pago} · você recebe ${reais(l.valorFuncionaria)} ${editar} ${excluir}</div>
+      <div class="item-sub">${tag}${pago} · você recebe ${reais(receberDe(l, compensa))} ${editar} ${excluir}</div>
     </div>
     <div class="item-valor">${reais(l.valor)}</div>
   </div>`;
@@ -245,7 +259,9 @@ function linkEditarHtml(l) {
 }
 
 // Mostra a "conta por trás" do valor pago: total cobrado − comissão do salão
-function contaHtml(l) {
+function contaHtml(l, compensa) {
+  if (compensa && l.forma === "dinheiro")
+    return `<small class="conta">valor cheio · comissão ${reais(l.comissaoSalao)} vai p/ o cartão</small>`;
   return `<small class="conta">${reais(l.valor)} − ${reais(l.comissaoSalao)} · ${l.regra}</small>`;
 }
 function ligarEditar(container, recarregar) {
@@ -312,7 +328,7 @@ async function carregarPagamentos() {
   usuarios.filter(ehFuncionaria).forEach(u => {
     const itens = porFunc[u.id] || [];
     if (!itens.length) return;
-    const total = itens.reduce((s, l) => s + l.valorFuncionaria, 0);
+    const total = itens.reduce((s, l) => s + receberDe(l, u.compensa), 0);
     const tudoPago = itens.every(l => l.pago);
     totalDia += total;
     cards.push(cardPagamentoHtml(u, itens, total, tudoPago, data));
@@ -334,7 +350,7 @@ function cardPagamentoHtml(u, itens, total, tudoPago, data) {
       <span>${l.comprovante ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}">` : ""}
         ${escapar(l.descricao)} <span class="tag tag-${l.forma}">${l.forma === "pix" ? "Pix" : "Dinheiro"}</span>
         ${l.pago ? "" : linkEditarHtml(l)}</span>
-      <span class="valor-conta"><strong>${reais(l.valorFuncionaria)}</strong>${contaHtml(l)}</span>
+      <span class="valor-conta"><strong>${reais(receberDe(l, u.compensa))}</strong>${contaHtml(l, u.compensa)}</span>
     </div>`).join("");
   const acao = tudoPago
     ? `<span class="pago-selo">✔ Pago</span>
@@ -403,15 +419,22 @@ async function carregarCartaoAcumulado() {
   usuarios.filter(ehFuncionaria).forEach(u => {
     const itens = (porFunc[u.id] || []).slice().sort((a, b) => a.data.localeCompare(b.data));
     if (!itens.length) return;
-    const bruto = itens.reduce((s, l) => s + l.valorFuncionaria, 0);
+    const brutoBase = itens.reduce((s, l) => s + l.valorFuncionaria, 0);
+    const divida = dividaCartaoDe(lancs.filter(l => l.usuarioId === u.id), u.compensa);
+    const bruto = Math.max(0, brutoBase - divida);
+    const falta = Math.max(0, divida - brutoBase);
     const liquido = bruto * (1 - (CONFIG.descontoCartao || 0.10));
     totalGeral += bruto;
     const linhas = itens.map(l => `
       <div class="linha-detalhe">
         <span>${dataBonita(l.data)} · ${escapar(l.descricao)}
           ${l.comprovante ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}">` : ""}</span>
-        <span class="valor-conta"><strong>${reais(l.valorFuncionaria)}</strong>${contaHtml(l)}</span>
+        <span class="valor-conta"><strong>${reais(l.valorFuncionaria)}</strong>${contaHtml(l, u.compensa)}</span>
       </div>`).join("");
+    const linhaDivida = divida > 0
+      ? `<div class="linha-detalhe"><span>− Comissão do dinheiro (método cartão)</span><strong>-${reais(divida)}</strong></div>` : "";
+    const avisoFalta = falta > 0
+      ? `<div class="alerta" style="margin-top:8px">⚠️ Faltou ${reais(falta)} de comissão além do cartão — cobrar por outro meio.</div>` : "";
     cards.push(`<div class="card-func">
       <div class="card-cab card-toggle">
         <span class="card-nome"><span class="seta">▸</span> ${escapar(u.nome)}</span>
@@ -419,7 +442,9 @@ async function carregarCartaoAcumulado() {
       </div>
       <div class="card-detalhe oculto">
         ${linhas}
+        ${linhaDivida}
         <div class="linha-detalhe"><span>Líquido a sacar (−${Math.round((CONFIG.descontoCartao||0.10)*100)}% maquineta)</span><strong>${reais(liquido)}</strong></div>
+        ${avisoFalta}
         <div class="acoes"><button class="btn-verde" data-pagar-cartao="${u.id}">Pagar acumulado e zerar</button></div>
       </div>
     </div>`);
@@ -560,11 +585,13 @@ async function carregarMeuMes() {
   const lancs = await api(`/api/lancamentos?de=${de}&ate=${ate}`);
   const porDia = {};
   let recebido = 0, pendente = 0;
+  const compensa = !!USUARIO.compensa;
   lancs.filter(l => l.forma !== "cartao").forEach(l => {
+    const v = receberDe(l, compensa);
     const d = porDia[l.data] = porDia[l.data] || { data: l.data, total: 0, pago: true };
-    d.total += l.valorFuncionaria;
+    d.total += v;
     if (!l.pago) d.pago = false;
-    if (l.pago) recebido += l.valorFuncionaria; else pendente += l.valorFuncionaria;
+    if (l.pago) recebido += v; else pendente += v;
   });
   $("#func-mes-recebido").textContent = reais(recebido);
   $("#func-mes-pendente").textContent = reais(pendente);
@@ -593,10 +620,12 @@ async function carregarDiasPagos() {
   if (de) qs.push("de=" + de);
   if (ate) qs.push("ate=" + ate);
   const lancs = await api("/api/lancamentos" + (qs.length ? "?" + qs.join("&") : ""));
+  const usuarios = await api("/api/usuarios");
+  const compMap = {}; usuarios.forEach(u => compMap[u.id] = u.compensa);
   const grupos = {};
   lancs.filter(l => l.forma !== "cartao" && l.pago).forEach(l => {
     const k = l.usuarioId + "|" + l.data;
-    (grupos[k] = grupos[k] || { data: l.data, nome: l.nome, valor: 0 }).valor += l.valorFuncionaria;
+    (grupos[k] = grupos[k] || { data: l.data, nome: l.nome, valor: 0 }).valor += receberDe(l, compMap[l.usuarioId]);
   });
   const lista = Object.values(grupos).sort((a, b) => b.data.localeCompare(a.data) || a.nome.localeCompare(b.nome));
   const cont = $("#adm-diaspagos");
@@ -614,12 +643,13 @@ async function carregarAlertaPendentes() {
   const el = $("#alerta-pendentes");
   if (!el) return;
   const hoje = hojeStr();
-  let lancs = [];
-  try { lancs = await api("/api/lancamentos"); } catch (e) { return; }
+  let lancs = [], usuarios = [];
+  try { lancs = await api("/api/lancamentos"); usuarios = await api("/api/usuarios"); } catch (e) { return; }
+  const compMap = {}; usuarios.forEach(u => compMap[u.id] = u.compensa);
   const grupos = {};
   lancs.filter(l => l.forma !== "cartao" && !l.pago && l.data < hoje).forEach(l => {
     const k = l.usuarioId + "|" + l.data;
-    (grupos[k] = grupos[k] || { data: l.data, nome: l.nome, valor: 0 }).valor += l.valorFuncionaria;
+    (grupos[k] = grupos[k] || { data: l.data, nome: l.nome, valor: 0 }).valor += receberDe(l, compMap[l.usuarioId]);
   });
   const lista = Object.values(grupos).sort((a, b) => a.data.localeCompare(b.data));
   if (!lista.length) { el.classList.add("oculto"); el.innerHTML = ""; return; }
@@ -687,11 +717,15 @@ async function carregarFuncionarias() {
       botoes = `<button class="btn-azul" data-editar="${u.id}">Editar</button>
          <button class="btn-vermelho" data-remover="${u.id}" data-nome="${escapar(u.nome)}">Excluir</button>`;
     }
+    const metodo = ehFuncionaria(u)
+      ? `<button class="btn-cinza" data-metodo="${u.id}" data-atual="${u.compensa ? 1 : 0}">Método cartão: ${u.compensa ? "LIGADO ✔" : "desligado"}</button>`
+      : "";
+    const acoes = [botoes, metodo].filter(Boolean).join(" ");
     return `<div class="card-func">
       <div class="card-cab">
         <div class="info-funcionaria"><span class="card-nome">${escapar(u.nome)}</span>${badge}</div>
       </div>
-      ${botoes ? `<div class="acoes">${botoes}</div>` : ""}
+      ${acoes ? `<div class="acoes">${acoes}</div>` : ""}
     </div>`;
   }).join("");
 
@@ -701,10 +735,47 @@ async function carregarFuncionarias() {
     try { await api("/api/usuarios/" + b.dataset.remover, { method: "DELETE" }); carregarFuncionarias(); }
     catch (e) { alert(e.message); }
   }));
+  cont.querySelectorAll("[data-metodo]").forEach(b => b.addEventListener("click", async () => {
+    const novo = b.dataset.atual !== "1";
+    try { await api("/api/usuarios/" + b.dataset.metodo, { method: "PUT", body: JSON.stringify({ compensa: novo }) }); carregarFuncionarias(); }
+    catch (e) { alert(e.message); }
+  }));
 
+  carregarConfigForm();
   // mantém o dropdown de login sincronizado
   carregarNomesLogin();
 }
+
+// ---------- Configurações (porcentagens) ----------
+async function carregarConfigForm() {
+  if (!$("#form-config")) return;
+  try {
+    const c = await api("/api/config");
+    $("#cfg-manicure").value = c.comissaoManicure;
+    $("#cfg-cab").value = Math.round(c.percCabeleireira * 100);
+    $("#cfg-quim").value = Math.round(c.percCabeleireiraQuimica * 100);
+    $("#cfg-henna").value = Math.round(c.percCabeleireiraHenna * 100);
+    $("#cfg-desc").value = Math.round(c.descontoCartao * 100);
+  } catch (e) {}
+}
+if ($("#form-config")) $("#form-config").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("#cfg-msg"); msg.textContent = ""; msg.className = "msg";
+  try {
+    const c = await api("/api/config", {
+      method: "PUT",
+      body: JSON.stringify({
+        comissaoManicure: Number($("#cfg-manicure").value),
+        percCabeleireira: Number($("#cfg-cab").value) / 100,
+        percCabeleireiraQuimica: Number($("#cfg-quim").value) / 100,
+        percCabeleireiraHenna: Number($("#cfg-henna").value) / 100,
+        descontoCartao: Number($("#cfg-desc").value) / 100
+      })
+    });
+    CONFIG = c;
+    msg.textContent = "Configurações salvas! ✔"; msg.className = "msg ok";
+  } catch (err) { msg.textContent = err.message; msg.className = "msg ruim"; }
+});
 
 async function editarFuncionaria(id, usuarios) {
   const u = usuarios.find(x => x.id === id);
