@@ -102,6 +102,9 @@ function ajustarPapel() {
       }
     }
   });
+  // Bira (assistente) vê as demandas, mas não pode designar (só concluir)
+  const demForm = $("#dem-form-bloco");
+  if (demForm) demForm.classList.toggle("oculto", assistente);
 }
 
 // ---------- meses ----------
@@ -283,6 +286,7 @@ $$(".aba").forEach(aba => {
     if (alvo === "ranking") carregarRankingAdmin();
     if (alvo === "backup") iniciarBackup();
     if (alvo === "funcionarias") carregarFuncionarias();
+    if (alvo === "demandas") carregarDemandas();
   });
 });
 
@@ -828,6 +832,82 @@ async function excluirPeriodo() {
     msg.textContent = `${r.excluidos} lançamento(s) excluído(s). Espaço liberado.`;
     msg.className = "msg ok";
   } catch (e) { msg.textContent = e.message; msg.className = "msg ruim"; }
+}
+
+// ============================================================
+//  ABA DEMANDAS (admin designa, Bira conclui)
+// ============================================================
+$("#form-demanda").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("#dem-msg"); msg.textContent = ""; msg.className = "msg";
+  try {
+    await api("/api/demandas", { method: "POST", body: JSON.stringify({ descricao: $("#dem-desc").value }) });
+    $("#form-demanda").reset();
+    msg.textContent = "Demanda designada! ✔"; msg.className = "msg ok";
+    carregarDemandas();
+  } catch (err) { msg.textContent = err.message; msg.className = "msg ruim"; }
+});
+
+function lerArquivoInput(input) {
+  return new Promise(res => {
+    const f = input && input.files && input.files[0];
+    if (!f) return res(null);
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => res(null);
+    r.readAsDataURL(f);
+  });
+}
+
+async function carregarDemandas() {
+  let lista = [];
+  try { lista = await api("/api/demandas"); } catch (e) {}
+  const cont = $("#adm-demandas");
+  if (!lista.length) { cont.innerHTML = '<div class="vazio">Nenhuma demanda ainda.</div>'; return; }
+  const souAdmin = USUARIO.tipo === "admin";
+  cont.innerHTML = lista.map(d => {
+    const concl = d.status === "concluida";
+    const badge = concl
+      ? '<span class="pago-selo">✔ concluída</span>'
+      : '<span class="tag" style="background:var(--amarelo-bg);color:var(--amarelo)">pendente</span>';
+    const foto = d.comprovante ? `<div style="margin-top:8px"><img class="mini-foto" src="${d.comprovante}" data-full="${d.comprovante}"></div>` : "";
+    let acoes;
+    if (!concl) {
+      acoes = `<label class="btn-cinza" style="cursor:pointer">📎 Anexar foto
+                 <input type="file" accept="image/*" class="dem-foto" data-id="${d.id}" style="display:none"></label>
+               <button class="btn-verde" data-concluir="${d.id}">Marcar como concluída</button>`;
+    } else {
+      acoes = `<button class="btn-cinza" data-reabrir-dem="${d.id}">Reabrir</button>`;
+    }
+    const excluir = souAdmin ? `<button class="btn-vermelho" data-excluir-dem="${d.id}">Excluir</button>` : "";
+    return `<div class="card-func">
+      <div class="card-cab"><span class="card-nome">${escapar(d.descricao)}</span>${badge}</div>
+      ${concl && d.concluidoEm ? `<div class="linha-detalhe"><span>Concluída em</span><strong>${dataBonita((d.concluidoEm || "").slice(0, 10))}</strong></div>` : ""}
+      ${foto}
+      <div class="acoes">${acoes} ${excluir}</div>
+    </div>`;
+  }).join("");
+  ligarFotos(cont);
+  cont.querySelectorAll(".dem-foto").forEach(inp => inp.addEventListener("change", () => {
+    const lab = inp.closest("label"); if (lab && inp.files[0]) lab.style.borderColor = "var(--gold)";
+  }));
+  cont.querySelectorAll("[data-concluir]").forEach(b => b.addEventListener("click", async () => {
+    const input = cont.querySelector(`.dem-foto[data-id="${b.dataset.concluir}"]`);
+    const foto = await lerArquivoInput(input);
+    try {
+      await api("/api/demandas/" + b.dataset.concluir, { method: "PUT", body: JSON.stringify({ status: "concluida", comprovanteBase64: foto }) });
+      carregarDemandas();
+    } catch (e) { alert(e.message); }
+  }));
+  cont.querySelectorAll("[data-reabrir-dem]").forEach(b => b.addEventListener("click", async () => {
+    try { await api("/api/demandas/" + b.dataset.reabrirDem, { method: "PUT", body: JSON.stringify({ status: "pendente" }) }); carregarDemandas(); }
+    catch (e) { alert(e.message); }
+  }));
+  cont.querySelectorAll("[data-excluir-dem]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Excluir esta demanda?")) return;
+    try { await api("/api/demandas/" + b.dataset.excluirDem, { method: "DELETE" }); carregarDemandas(); }
+    catch (e) { alert(e.message); }
+  }));
 }
 
 // ============================================================

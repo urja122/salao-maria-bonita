@@ -111,6 +111,7 @@
       <button class="aba" data-aba="ranking">Ranking</button>
       <button class="aba" data-aba="backup">Backup</button>
       <button class="aba" data-aba="funcionarias">Funcionárias</button>
+      <button class="aba" data-aba="demandas">Demandas</button>
     </nav>
 
     <!-- Aba: pagamentos do dia -->
@@ -217,6 +218,20 @@
         <p id="nf-msg" class="msg"></p>
       </div>
       <div id="adm-funcionarias" class="lista-cards"></div>
+    </div>
+
+    <!-- Aba: demandas (admin e Bira) -->
+    <div id="painel-demandas" class="painel">
+      <div id="dem-form-bloco" class="bloco">
+        <h2>Nova demanda para o Bira</h2>
+        <form id="form-demanda">
+          <label>Descrição da demanda</label>
+          <input id="dem-desc" type="text" placeholder="Ex.: Consertar a luminária da recepção" required />
+          <button type="submit" class="btn-principal">Designar demanda</button>
+          <p id="dem-msg" class="msg"></p>
+        </form>
+      </div>
+      <div id="adm-demandas" class="lista-cards"></div>
     </div>
   </section>
 
