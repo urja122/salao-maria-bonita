@@ -18,22 +18,42 @@ const CONFIG = {
   descontoCartao: 0.10,
   comissaoManicure: 5,
   percCabeleireira: 0.50,
-  percCabeleireiraQuimica: 0.40
+  percCabeleireiraQuimica: 0.40,
+  percCabeleireiraHenna: 0.60
 };
+
+// Lê as porcentagens configuráveis do banco (com fallback nos padrões)
+async function getConfig() {
+  let row = {};
+  try { row = (await sb("config?select=*&id=eq.1"))[0] || {}; } catch (e) {}
+  return {
+    empresa: CONFIG.empresa,
+    comissaoManicure: Number(row.comissao_manicure ?? CONFIG.comissaoManicure),
+    percCabeleireira: Number(row.perc_cab ?? CONFIG.percCabeleireira),
+    percCabeleireiraQuimica: Number(row.perc_cab_quimica ?? CONFIG.percCabeleireiraQuimica),
+    percCabeleireiraHenna: Number(row.perc_cab_henna ?? CONFIG.percCabeleireiraHenna),
+    descontoCartao: Number(row.desconto_cartao ?? CONFIG.descontoCartao)
+  };
+}
 
 // ---------- utilidades ----------
 function round2(n) { return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
 function novoId(pref) { return pref + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
-function calcularComissao(tipo, descricao, valor) {
+function calcularComissao(tipo, descricao, valor, cfg) {
+  cfg = cfg || CONFIG;
   valor = Number(valor) || 0;
+  const desc = descricao || "";
   if (tipo === "cabeleireira") {
-    const temQuimica = /qu[ií]mica/i.test(descricao || "");
-    const perc = temQuimica ? CONFIG.percCabeleireiraQuimica : CONFIG.percCabeleireira;
+    let perc, regra;
+    if (/henna/i.test(desc)) { perc = cfg.percCabeleireiraHenna; regra = `${Math.round(perc * 100)}% (henna)`; }
+    else if (/qu[ií]mica/i.test(desc)) { perc = cfg.percCabeleireiraQuimica; regra = `${Math.round(perc * 100)}% (química)`; }
+    else { perc = cfg.percCabeleireira; regra = `${Math.round(perc * 100)}%`; }
     const comissao = round2(valor * perc);
-    return { comissaoSalao: comissao, valorFuncionaria: round2(valor - comissao), regra: temQuimica ? "40% (química)" : "50%" };
+    return { comissaoSalao: comissao, valorFuncionaria: round2(valor - comissao), regra };
   }
-  return { comissaoSalao: CONFIG.comissaoManicure, valorFuncionaria: round2(valor - CONFIG.comissaoManicure), regra: "R$5 fixo" };
+  const c = cfg.comissaoManicure;
+  return { comissaoSalao: c, valorFuncionaria: round2(valor - c), regra: `R$${c} fixo` };
 }
 
 // ---------- token (HMAC, sem sessão no servidor) ----------
@@ -88,7 +108,8 @@ function toApi(row) {
     id: row.id, usuarioId: row.usuario_id, nome: row.nome, tipo: row.tipo,
     data: row.data, descricao: row.descricao, valor: Number(row.valor), forma: row.forma,
     comissaoSalao: Number(row.comissao_salao), valorFuncionaria: Number(row.valor_funcionaria),
-    regra: row.regra, comprovante: row.comprovante, pago: row.pago, criadoEm: row.criado_em
+    regra: row.regra, comprovante: row.comprovante, pago: row.pago, criadoEm: row.criado_em,
+    commQuitada: row.comm_quitada !== false
   };
 }
 
@@ -128,8 +149,9 @@ exports.handler = async (event) => {
       const usuarios = await sb("usuarios?select=*");
       const u = usuarios.find(x => x.nome.trim().toLowerCase() === nome && x.senha === senha);
       if (!u) return resp(401, { erro: "Nome ou senha incorretos." });
-      const token = assinar({ id: u.id, nome: u.nome, tipo: u.tipo });
-      return resp(200, { id: u.id, nome: u.nome, tipo: u.tipo, token });
+      const compensa = !!u.compensa_dinheiro;
+      const token = assinar({ id: u.id, nome: u.nome, tipo: u.tipo, compensa });
+      return resp(200, { id: u.id, nome: u.nome, tipo: u.tipo, compensa, token });
     }
 
     // ---------- NOMES (público, para o dropdown) ----------
@@ -146,7 +168,18 @@ exports.handler = async (event) => {
     const ehAdmin = atual.tipo === "admin";
     const ehGestor = ehAdmin || atual.tipo === "assistente"; // admin ou assistente
 
-    if (sub === "/config" && metodo === "GET") return resp(200, CONFIG);
+    if (sub === "/config" && metodo === "GET") return resp(200, await getConfig());
+    if (sub === "/config" && metodo === "PUT") {
+      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      const patch = {};
+      if (corpo.comissaoManicure != null) patch.comissao_manicure = Number(corpo.comissaoManicure);
+      if (corpo.percCabeleireira != null) patch.perc_cab = Number(corpo.percCabeleireira);
+      if (corpo.percCabeleireiraQuimica != null) patch.perc_cab_quimica = Number(corpo.percCabeleireiraQuimica);
+      if (corpo.percCabeleireiraHenna != null) patch.perc_cab_henna = Number(corpo.percCabeleireiraHenna);
+      if (corpo.descontoCartao != null) patch.desconto_cartao = Number(corpo.descontoCartao);
+      if (Object.keys(patch).length) await sb("config?id=eq.1", { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(patch) });
+      return resp(200, await getConfig());
+    }
 
     // ---------- RANKING DO MÊS (qualquer usuário logado) ----------
     // Retorna SÓ a quantidade de serviços por funcionária (nunca valores).
@@ -218,8 +251,8 @@ exports.handler = async (event) => {
     // ---------- USUÁRIOS ----------
     if (sub === "/usuarios" && metodo === "GET") {
       if (!ehGestor) return resp(403, { erro: "Sem permissão." });
-      const usuarios = await sb("usuarios?select=id,nome,tipo&order=nome");
-      return resp(200, usuarios);
+      const usuarios = await sb("usuarios?select=id,nome,tipo,compensa_dinheiro&order=nome");
+      return resp(200, usuarios.map(u => ({ id: u.id, nome: u.nome, tipo: u.tipo, compensa: !!u.compensa_dinheiro })));
     }
     if (sub === "/usuarios" && metodo === "POST") {
       if (!ehGestor) return resp(403, { erro: "Sem permissão." });
@@ -243,6 +276,7 @@ exports.handler = async (event) => {
       if (corpo.nome !== undefined && corpo.nome.trim()) patch.nome = corpo.nome.trim();
       if (corpo.senha !== undefined && corpo.senha.trim()) patch.senha = corpo.senha.trim();
       if (corpo.tipo !== undefined && alvo.tipo !== "admin") patch.tipo = corpo.tipo === "cabeleireira" ? "cabeleireira" : "manicure";
+      if (corpo.compensa !== undefined) patch.compensa_dinheiro = !!corpo.compensa;
       if (Object.keys(patch).length) await sb(`usuarios?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(patch) });
       return resp(200, { id, nome: patch.nome || alvo.nome, tipo: patch.tipo || alvo.tipo });
     }
@@ -265,12 +299,14 @@ exports.handler = async (event) => {
       if (!descricao) return resp(400, { erro: "Descreva o serviço." });
       if (!(valor > 0)) return resp(400, { erro: "Informe um valor válido." });
 
-      let dono = { id: atual.id, nome: atual.nome, tipo: atual.tipo };
+      let dono = { id: atual.id, nome: atual.nome, tipo: atual.tipo, compensa: atual.compensa };
       if (ehAdmin && corpo.usuarioId) {
         const outro = (await sb(`usuarios?select=*&id=eq.${corpo.usuarioId}`))[0];
         if (outro) dono = outro;
       }
-      const c = calcularComissao(dono.tipo, descricao, valor);
+      const cfg = await getConfig();
+      const c = calcularComissao(dono.tipo, descricao, valor, cfg);
+      const compensaDono = dono.compensa_dinheiro !== undefined ? !!dono.compensa_dinheiro : !!dono.compensa;
 
       let comprovante = null;
       if (corpo.comprovanteBase64) {
@@ -284,7 +320,8 @@ exports.handler = async (event) => {
         id: novoId("l"), usuario_id: dono.id, nome: dono.nome, tipo: dono.tipo,
         data: corpo.data || new Date().toISOString().slice(0, 10),
         descricao, valor, forma, comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria,
-        regra: c.regra, comprovante, pago: false
+        regra: c.regra, comprovante, pago: false,
+        comm_quitada: !(compensaDono && forma === "dinheiro")
       };
       const inserido = await sb("lancamentos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
       return resp(200, toApi(inserido[0]));
@@ -312,8 +349,13 @@ exports.handler = async (event) => {
       const forma = ["pix", "cartao", "dinheiro"].includes(corpo.forma) ? corpo.forma : l.forma;
       if (!descricao) return resp(400, { erro: "Descreva o serviço." });
       if (!(valor > 0)) return resp(400, { erro: "Informe um valor válido." });
-      const c = calcularComissao(l.tipo, descricao, valor);
-      const patch = { descricao, valor, forma, comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria, regra: c.regra };
+      const cfg = await getConfig();
+      const c = calcularComissao(l.tipo, descricao, valor, cfg);
+      const dono2 = (await sb(`usuarios?select=compensa_dinheiro&id=eq.${l.usuario_id}`))[0] || {};
+      const patch = {
+        descricao, valor, forma, comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria, regra: c.regra,
+        comm_quitada: !(!!dono2.compensa_dinheiro && forma === "dinheiro")
+      };
       const upd = await sb(`lancamentos?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) });
       return resp(200, toApi(upd[0]));
     }
@@ -331,11 +373,14 @@ exports.handler = async (event) => {
     // ---------- PAGAR / REABRIR ----------
     if (sub === "/pagar" && metodo === "POST") {
       if (!ehGestor) return resp(403, { erro: "Sem permissão." });
-      let filtro = `usuario_id=eq.${corpo.usuarioId}&pago=eq.false`;
-      if (corpo.escopo === "dia") filtro += `&data=eq.${corpo.data}&forma=neq.cartao`;
-      else if (corpo.escopo === "cartao") filtro += `&forma=eq.cartao`;
-      else return resp(400, { erro: "Escopo inválido." });
-      await sb(`lancamentos?${filtro}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ pago: true }) });
+      const uid = corpo.usuarioId;
+      if (corpo.escopo === "dia") {
+        await sb(`lancamentos?usuario_id=eq.${uid}&pago=eq.false&data=eq.${corpo.data}&forma=neq.cartao`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ pago: true }) });
+      } else if (corpo.escopo === "cartao") {
+        await sb(`lancamentos?usuario_id=eq.${uid}&pago=eq.false&forma=eq.cartao`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ pago: true }) });
+        // método do cartão: quita as comissões de dinheiro que estavam penduradas
+        await sb(`lancamentos?usuario_id=eq.${uid}&forma=eq.dinheiro&comm_quitada=eq.false`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ comm_quitada: true }) });
+      } else return resp(400, { erro: "Escopo inválido." });
       return resp(200, { ok: true });
     }
     if (sub === "/reabrir" && metodo === "POST") {
