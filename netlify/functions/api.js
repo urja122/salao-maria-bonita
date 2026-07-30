@@ -40,10 +40,21 @@ async function getConfig() {
 function round2(n) { return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
 function novoId(pref) { return pref + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
-function calcularComissao(tipo, descricao, valor, cfg) {
+function calcularComissao(tipo, descricao, valor, cfg, servicos) {
   cfg = cfg || CONFIG;
   valor = Number(valor) || 0;
   const desc = descricao || "";
+  // serviço com comissão própria (por nome) tem prioridade sobre a regra normal
+  const serv = (servicos || []).find(s => s.nome && s.ativo !== false &&
+    desc.toLowerCase().includes(String(s.nome).toLowerCase()));
+  if (serv) {
+    if (serv.tipo_comissao === "percentual") {
+      const comissao = round2(valor * Number(serv.valor));
+      return { comissaoSalao: comissao, valorFuncionaria: round2(valor - comissao), regra: `${Math.round(Number(serv.valor) * 10000) / 100}% (serviço)` };
+    }
+    const comissao = round2(Number(serv.valor));
+    return { comissaoSalao: comissao, valorFuncionaria: round2(valor - comissao), regra: `R$${comissao} fixo (serviço)` };
+  }
   if (tipo === "cabeleireira") {
     let perc, regra;
     if (/henna/i.test(desc)) { perc = cfg.percCabeleireiraHenna; regra = `${Math.round(perc * 100)}% (henna)`; }
@@ -120,6 +131,10 @@ function demApi(row) {
   };
 }
 
+function servApi(row) {
+  return { id: row.id, nome: row.nome, tipoComissao: row.tipo_comissao, valor: Number(row.valor), ativo: row.ativo !== false };
+}
+
 const resp = (code, obj) => ({
   statusCode: code,
   headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
@@ -179,6 +194,31 @@ exports.handler = async (event) => {
       if (corpo.descontoCartao != null) patch.desconto_cartao = Number(corpo.descontoCartao);
       if (Object.keys(patch).length) await sb("config?id=eq.1", { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(patch) });
       return resp(200, await getConfig());
+    }
+
+    // ---------- SERVIÇOS com comissão própria ----------
+    if (sub === "/servicos" && metodo === "GET") {
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
+      const rows = await sb("servicos?select=*&order=nome");
+      return resp(200, rows.map(servApi));
+    }
+    if (sub === "/servicos" && metodo === "POST") {
+      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      const nome = (corpo.nome || "").trim();
+      const tipo = corpo.tipoComissao === "percentual" ? "percentual" : "fixo";
+      let valor = Number(corpo.valor) || 0;
+      if (tipo === "percentual") valor = valor / 100; // recebe % e guarda fração
+      if (!nome) return resp(400, { erro: "Informe o nome do serviço." });
+      if (!(valor > 0)) return resp(400, { erro: "Informe um valor válido." });
+      const row = { id: novoId("s"), nome, tipo_comissao: tipo, valor, ativo: true };
+      await sb("servicos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(row) });
+      return resp(200, servApi(row));
+    }
+    if (sub.startsWith("/servicos/") && metodo === "DELETE") {
+      if (!ehAdmin) return resp(403, { erro: "Sem permissão." });
+      const id = decodeURIComponent(sub.split("/").pop());
+      await sb(`servicos?id=eq.${id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      return resp(200, { ok: true });
     }
 
     // ---------- RANKING DO MÊS (qualquer usuário logado) ----------
@@ -305,7 +345,8 @@ exports.handler = async (event) => {
         if (outro) dono = outro;
       }
       const cfg = await getConfig();
-      const c = calcularComissao(dono.tipo, descricao, valor, cfg);
+      const servicos = await sb("servicos?select=*&ativo=eq.true");
+      const c = calcularComissao(dono.tipo, descricao, valor, cfg, servicos);
       const compensaDono = dono.compensa_dinheiro !== undefined ? !!dono.compensa_dinheiro : !!dono.compensa;
 
       let comprovante = null;
@@ -350,7 +391,8 @@ exports.handler = async (event) => {
       if (!descricao) return resp(400, { erro: "Descreva o serviço." });
       if (!(valor > 0)) return resp(400, { erro: "Informe um valor válido." });
       const cfg = await getConfig();
-      const c = calcularComissao(l.tipo, descricao, valor, cfg);
+      const servicos = await sb("servicos?select=*&ativo=eq.true");
+      const c = calcularComissao(l.tipo, descricao, valor, cfg, servicos);
       const dono2 = (await sb(`usuarios?select=compensa_dinheiro&id=eq.${l.usuario_id}`))[0] || {};
       const patch = {
         descricao, valor, forma, comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria, regra: c.regra,
