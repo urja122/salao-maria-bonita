@@ -749,14 +749,53 @@ async function carregarFuncionarias() {
 // ---------- Configurações (porcentagens) ----------
 async function carregarConfigForm() {
   if (!$("#form-config")) return;
+  const pct = x => Math.round(x * 10000) / 100; // mantém casas decimais (ex.: 62,5)
   try {
     const c = await api("/api/config");
     $("#cfg-manicure").value = c.comissaoManicure;
-    $("#cfg-cab").value = Math.round(c.percCabeleireira * 100);
-    $("#cfg-quim").value = Math.round(c.percCabeleireiraQuimica * 100);
-    $("#cfg-henna").value = Math.round(c.percCabeleireiraHenna * 100);
-    $("#cfg-desc").value = Math.round(c.descontoCartao * 100);
+    $("#cfg-cab").value = pct(c.percCabeleireira);
+    $("#cfg-quim").value = pct(c.percCabeleireiraQuimica);
+    $("#cfg-henna").value = pct(c.percCabeleireiraHenna);
+    $("#cfg-desc").value = pct(c.descontoCartao);
   } catch (e) {}
+  carregarServicos();
+}
+
+// ---------- Serviços com comissão própria ----------
+if ($("#form-servico-com")) $("#form-servico-com").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("#sc-msg"); msg.textContent = ""; msg.className = "msg";
+  try {
+    await api("/api/servicos", {
+      method: "POST",
+      body: JSON.stringify({ nome: $("#sc-nome").value, tipoComissao: $("#sc-tipo").value, valor: Number($("#sc-valor").value) })
+    });
+    $("#form-servico-com").reset();
+    msg.textContent = "Serviço adicionado! ✔"; msg.className = "msg ok";
+    carregarServicos();
+  } catch (err) { msg.textContent = err.message; msg.className = "msg ruim"; }
+});
+
+async function carregarServicos() {
+  const cont = $("#lista-servicos");
+  if (!cont) return;
+  let lista = [];
+  try { lista = await api("/api/servicos"); } catch (e) { return; }
+  cont.innerHTML = lista.length ? lista.map(s => {
+    const regra = s.tipoComissao === "percentual"
+      ? `${Math.round(s.valor * 10000) / 100}% pra você`
+      : `${reais(s.valor)} pra você`;
+    return `<div class="card-func rank-linha">
+      <span class="rank-nome">${escapar(s.nome)}</span>
+      <span class="rank-qtd">${regra}</span>
+      <button class="btn-vermelho" data-del-serv="${s.id}">Excluir</button>
+    </div>`;
+  }).join("") : '<div class="vazio">Nenhum serviço com comissão própria.</div>';
+  cont.querySelectorAll("[data-del-serv]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Excluir este serviço?")) return;
+    try { await api("/api/servicos/" + b.dataset.delServ, { method: "DELETE" }); carregarServicos(); }
+    catch (e) { alert(e.message); }
+  }));
 }
 if ($("#form-config")) $("#form-config").addEventListener("submit", async (e) => {
   e.preventDefault();
