@@ -10,6 +10,9 @@ let CONFIG = { descontoCartao: 0.10 };
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+// fundo rotativo: sorteia 1 das 3 fotos a cada carregamento
+try { document.documentElement.style.setProperty("--fundo", `url("fundo${1 + Math.floor(Math.random() * 3)}.jpg")`); } catch (e) {}
+
 // quem é funcionária de fato (aparece nos painéis de pagamento/cartão/lucro)
 function ehFuncionaria(u) { return u.tipo === "manicure" || u.tipo === "cabeleireira"; }
 
