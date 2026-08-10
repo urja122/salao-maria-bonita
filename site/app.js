@@ -173,6 +173,9 @@ $("#form-servico").addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = $("#serv-msg");
   msg.textContent = ""; msg.className = "msg";
+  const botao = e.target.querySelector('button[type="submit"]');
+  if (botao.disabled) return;                 // trava contra duplo clique
+  botao.disabled = true; botao.textContent = "Salvando...";
   const forma = document.querySelector('input[name="forma"]:checked').value;
   try {
     await api("/api/lancamentos", {
@@ -194,6 +197,8 @@ $("#form-servico").addEventListener("submit", async (e) => {
   } catch (err) {
     msg.textContent = err.message;
     msg.className = "msg ruim";
+  } finally {
+    botao.disabled = false; botao.textContent = "Salvar serviço";
   }
 });
 
