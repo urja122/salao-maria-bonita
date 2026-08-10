@@ -349,19 +349,29 @@ exports.handler = async (event) => {
       const c = calcularComissao(dono.tipo, descricao, valor, cfg, servicos);
       const compensaDono = dono.compensa_dinheiro !== undefined ? !!dono.compensa_dinheiro : !!dono.compensa;
 
-      let comprovante = null;
+      let comprovante = null, comprovanteHash = null;
       if (corpo.comprovanteBase64) {
         const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/.exec(corpo.comprovanteBase64);
         if (m) {
+          const buf = Buffer.from(m[2], "base64");
+          comprovanteHash = crypto.createHash("sha256").update(buf).digest("hex");
+          // detecta comprovante duplicado (mesma foto já enviada)
+          try {
+            const iguais = await sb(`lancamentos?select=nome,descricao&comprovante_hash=eq.${comprovanteHash}&limit=1`);
+            if (iguais.length) {
+              const d = iguais[0];
+              return resp(409, { erro: `Esse comprovante já foi enviado (serviço "${d.descricao}" de ${d.nome}). Se for outro serviço, tire outra foto.` });
+            }
+          } catch (e) {}
           const ext = "." + m[1].split("/")[1].replace("jpeg", "jpg").replace("+xml", "");
-          comprovante = await sbUpload(novoId("cmp") + ext, Buffer.from(m[2], "base64"), m[1]);
+          comprovante = await sbUpload(novoId("cmp") + ext, buf, m[1]);
         }
       }
       const row = {
         id: novoId("l"), usuario_id: dono.id, nome: dono.nome, tipo: dono.tipo,
         data: corpo.data || new Date().toISOString().slice(0, 10),
         descricao, valor, forma, comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria,
-        regra: c.regra, comprovante, pago: false,
+        regra: c.regra, comprovante, comprovante_hash: comprovanteHash, pago: false,
         comm_quitada: !(compensaDono && forma === "dinheiro")
       };
       const inserido = await sb("lancamentos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
