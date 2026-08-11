@@ -247,6 +247,12 @@ exports.handler = async (event) => {
       return resp(200, { porServicos, porFaturamento });
     }
 
+    // ---------- FUNCIONÁRIAS (para o dropdown do pagamento conjunto) ----------
+    if (sub === "/funcionarias" && metodo === "GET") {
+      const rows = await sb("usuarios?select=id,nome,tipo&order=nome");
+      return resp(200, rows.filter(u => u.tipo === "manicure" || u.tipo === "cabeleireira").map(u => ({ id: u.id, nome: u.nome })));
+    }
+
     // ---------- DEMANDAS (admin designa, Bira conclui) ----------
     if (sub === "/demandas" && metodo === "GET") {
       if (!ehGestor) return resp(403, { erro: "Sem permissão." });
@@ -376,6 +382,47 @@ exports.handler = async (event) => {
       };
       const inserido = await sb("lancamentos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
       return resp(200, toApi(inserido[0]));
+    }
+
+    // ---------- PAGAMENTO CONJUNTO (uma pessoa lança, vai para todas) ----------
+    if (sub === "/lancamentos-conjunto" && metodo === "POST") {
+      const forma = ["pix", "cartao", "dinheiro"].includes(corpo.forma) ? corpo.forma : "pix";
+      const data = corpo.data || new Date().toISOString().slice(0, 10);
+      const parts = Array.isArray(corpo.participantes) ? corpo.participantes : [];
+      if (parts.length < 1) return resp(400, { erro: "Informe as funcionárias do pagamento conjunto." });
+      for (const p of parts) {
+        if (!String(p.descricao || "").trim()) return resp(400, { erro: "Descreva o serviço de cada funcionária." });
+        if (!(Number(p.valor) > 0)) return resp(400, { erro: "Informe um valor válido para cada funcionária." });
+      }
+      const usuarios = await sb("usuarios?select=*");
+      const cfg = await getConfig();
+      const servicos = await sb("servicos?select=*&ativo=eq.true");
+      let comprovante = null, comprovanteHash = null;
+      if (corpo.comprovanteBase64) {
+        const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/.exec(corpo.comprovanteBase64);
+        if (m) {
+          const buf = Buffer.from(m[2], "base64");
+          comprovanteHash = crypto.createHash("sha256").update(buf).digest("hex");
+          const ext = "." + m[1].split("/")[1].replace("jpeg", "jpg").replace("+xml", "");
+          comprovante = await sbUpload(novoId("cmp") + ext, buf, m[1]);
+        }
+      }
+      const rows = [];
+      for (const p of parts) {
+        const dono = usuarios.find(u => u.id === p.usuarioId);
+        if (!dono || !(dono.tipo === "manicure" || dono.tipo === "cabeleireira")) return resp(400, { erro: "Funcionária inválida no pagamento conjunto." });
+        const valor = round2(p.valor);
+        const c = calcularComissao(dono.tipo, p.descricao, valor, cfg, servicos);
+        rows.push({
+          id: novoId("l"), usuario_id: dono.id, nome: dono.nome, tipo: dono.tipo,
+          data, descricao: String(p.descricao).trim(), valor, forma,
+          comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria, regra: c.regra,
+          comprovante, comprovante_hash: comprovanteHash, pago: false,
+          comm_quitada: !(!!dono.compensa_dinheiro && forma === "dinheiro")
+        });
+      }
+      const inseridos = await sb("lancamentos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(rows) });
+      return resp(200, inseridos.map(toApi));
     }
 
     if (sub === "/lancamentos" && metodo === "GET") {
