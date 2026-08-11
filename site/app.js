@@ -16,10 +16,14 @@ try { document.documentElement.style.setProperty("--fundo", `url("fundo${1 + Mat
 // quem é funcionária de fato (aparece nos painéis de pagamento/cartão/lucro)
 function ehFuncionaria(u) { return u.tipo === "manicure" || u.tipo === "cabeleireira"; }
 
+let FUNCIONARIAS = []; // lista para o dropdown do pagamento conjunto
+
 // ---------- método "compensar comissão pelo cartão" (afeta só dinheiro) ----------
-// valor que a funcionária recebe daquele lançamento
+// quanto o salão PAGA à funcionária por esse lançamento no dia
 function receberDe(l, compensa) {
-  return (compensa && l.forma === "dinheiro") ? l.valor : l.valorFuncionaria;
+  if (l.forma === "cartao") return 0;                      // cartão acumula, não é do dia
+  if (compensa && l.forma === "dinheiro") return 0;        // recebeu na hora, não entra no pagamento do dia
+  return l.valorFuncionaria;
 }
 // comissão de dinheiro que fica "pendurada" no cartão (ainda não quitada)
 function dividaCartaoDe(lancs, compensa) {
@@ -101,6 +105,7 @@ async function entrarNoSistema() {
     mostrarTela("funcionaria");
     await carregarMeuDia();
     carregarRankingFunc();
+    try { FUNCIONARIAS = await api("/api/funcionarias"); } catch (e) {}
   }
 }
 
@@ -178,17 +183,32 @@ $("#form-servico").addEventListener("submit", async (e) => {
   botao.disabled = true; botao.textContent = "Salvando...";
   const forma = document.querySelector('input[name="forma"]:checked').value;
   try {
-    await api("/api/lancamentos", {
-      method: "POST",
-      body: JSON.stringify({
-        descricao: $("#serv-descricao").value,
-        valor: $("#serv-valor").value,
-        forma,
-        data: hojeStr(), // usa a data local do aparelho (corrige o fuso à noite)
-        comprovanteBase64: fotoBase64
-      })
-    });
+    if ($("#serv-conjunto") && $("#serv-conjunto").checked) {
+      const participantes = [{ usuarioId: USUARIO.id, descricao: $("#serv-descricao").value, valor: $("#serv-valor").value }];
+      $$(".participante").forEach(p => participantes.push({
+        usuarioId: p.querySelector(".cj-func").value,
+        descricao: p.querySelector(".cj-desc").value,
+        valor: p.querySelector(".cj-valor").value
+      }));
+      await api("/api/lancamentos-conjunto", {
+        method: "POST",
+        body: JSON.stringify({ forma, data: hojeStr(), comprovanteBase64: fotoBase64, participantes })
+      });
+    } else {
+      await api("/api/lancamentos", {
+        method: "POST",
+        body: JSON.stringify({
+          descricao: $("#serv-descricao").value,
+          valor: $("#serv-valor").value,
+          forma,
+          data: hojeStr(), // usa a data local do aparelho (corrige o fuso à noite)
+          comprovanteBase64: fotoBase64
+        })
+      });
+    }
     $("#form-servico").reset();
+    $("#conjunto-box").classList.add("oculto");
+    $("#conjunto-lista").innerHTML = "";
     $("#serv-previa").classList.add("oculto");
     fotoBase64 = null;
     msg.textContent = "Serviço salvo! ✔";
@@ -202,6 +222,29 @@ $("#form-servico").addEventListener("submit", async (e) => {
   }
 });
 
+// ---------- Pagamento conjunto (UI) ----------
+if ($("#serv-conjunto")) $("#serv-conjunto").addEventListener("change", (e) => {
+  $("#conjunto-box").classList.toggle("oculto", !e.target.checked);
+  if (e.target.checked && !$("#conjunto-lista").children.length) addParticipante();
+});
+if ($("#conjunto-add")) $("#conjunto-add").addEventListener("click", () => addParticipante());
+function addParticipante() {
+  const opts = FUNCIONARIAS.filter(f => f.id !== USUARIO.id)
+    .map(f => `<option value="${f.id}">${escapar(f.nome)}</option>`).join("");
+  const div = document.createElement("div");
+  div.className = "participante";
+  div.innerHTML = `
+    <label>Funcionária</label>
+    <select class="cj-func">${opts}</select>
+    <label>Serviço dela</label>
+    <input class="cj-desc" type="text" placeholder="Ex.: pé e mão" />
+    <label>Valor dela (R$)</label>
+    <input class="cj-valor" type="number" step="0.01" min="0" placeholder="0,00" />
+    <button type="button" class="btn-vermelho cj-remove" style="margin-top:8px">remover</button>`;
+  div.querySelector(".cj-remove").addEventListener("click", () => div.remove());
+  $("#conjunto-lista").appendChild(div);
+}
+
 async function carregarMeuDia() {
   const hoje = hojeStr();
   const doDia = await api("/api/lancamentos?data=" + hoje);
@@ -211,12 +254,18 @@ async function carregarMeuDia() {
   const receberHoje = doDia
     .filter(l => l.forma !== "cartao")
     .reduce((s, l) => s + receberDe(l, compensa), 0);
+  const dinheiroHoje = compensa
+    ? doDia.filter(l => l.forma === "dinheiro").reduce((s, l) => s + l.valor, 0)
+    : 0;
   const cartaoBase = cartaoTudo
     .filter(l => l.forma === "cartao" && !l.pago)
     .reduce((s, l) => s + l.valorFuncionaria, 0);
   const cartaoAcum = Math.max(0, cartaoBase - dividaCartaoDe(cartaoTudo, compensa));
 
+  const lblRec = $("#func-receber-label"); if (lblRec) lblRec.textContent = compensa ? "A receber hoje (Pix)" : "A receber hoje";
   $("#func-receber").textContent = reais(receberHoje);
+  const chipDin = $("#chip-func-dinheiro");
+  if (chipDin) { chipDin.classList.toggle("oculto", !compensa); $("#func-dinheiro").textContent = reais(dinheiroHoje); }
   $("#func-cartao").textContent = reais(cartaoAcum);
 
   const lista = $("#func-lista");
@@ -245,7 +294,7 @@ function itemLancamentoHtml(l, podeExcluir, compensa) {
     ${foto}
     <div class="item-info">
       <div class="item-desc">${escapar(l.descricao)}</div>
-      <div class="item-sub">${tag}${pago} · você recebe ${reais(receberDe(l, compensa))} ${editar} ${excluir}</div>
+      <div class="item-sub">${tag}${pago} · ${(compensa && l.forma === "dinheiro") ? `recebido na hora ${reais(l.valor)}` : `você recebe ${reais(receberDe(l, compensa))}`} ${editar} ${excluir}</div>
     </div>
     <div class="item-valor">${reais(l.valor)}</div>
   </div>`;
@@ -269,7 +318,7 @@ function linkEditarHtml(l) {
 // Mostra a "conta por trás" do valor pago: total cobrado − comissão do salão
 function contaHtml(l, compensa) {
   if (compensa && l.forma === "dinheiro")
-    return `<small class="conta">valor cheio · comissão ${reais(l.comissaoSalao)} vai p/ o cartão</small>`;
+    return `<small class="conta">não entra no pagamento · comissão ${reais(l.comissaoSalao)} sai do cartão</small>`;
   return `<small class="conta">${reais(l.valor)} − ${reais(l.comissaoSalao)} · ${l.regra}</small>`;
 }
 function ligarEditar(container, recarregar) {
@@ -353,13 +402,17 @@ async function carregarPagamentos() {
 }
 
 function cardPagamentoHtml(u, itens, total, tudoPago, data) {
-  const linhas = itens.map(l => `
-    <div class="linha-detalhe">
+  const linhas = itens.map(l => {
+    const dinCompensa = u.compensa && l.forma === "dinheiro";      // dinheiro já recebido na hora
+    const valExib = dinCompensa ? l.valor : receberDe(l, u.compensa);
+    return `<div class="linha-detalhe ${dinCompensa ? "linha-cinza" : ""}">
       <span>${l.comprovante ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}">` : ""}
         ${escapar(l.descricao)} <span class="tag tag-${l.forma}">${l.forma === "pix" ? "Pix" : "Dinheiro"}</span>
+        ${dinCompensa ? '<span class="mini-cinza">recebido na hora</span>' : ""}
         ${l.pago ? "" : linkEditarHtml(l)}</span>
-      <span class="valor-conta"><strong>${reais(receberDe(l, u.compensa))}</strong>${contaHtml(l, u.compensa)}</span>
-    </div>`).join("");
+      <span class="valor-conta"><strong>${reais(valExib)}</strong>${contaHtml(l, u.compensa)}</span>
+    </div>`;
+  }).join("");
   const acao = tudoPago
     ? `<span class="pago-selo">✔ Pago</span>
        <button class="btn-cinza" data-reabrir="${u.id}">Desfazer</button>`
@@ -442,7 +495,7 @@ async function carregarCartaoAcumulado() {
     const linhaDivida = divida > 0
       ? `<div class="linha-detalhe"><span>− Comissão do dinheiro (método cartão)</span><strong>-${reais(divida)}</strong></div>` : "";
     const avisoFalta = falta > 0
-      ? `<div class="alerta" style="margin-top:8px">⚠️ Faltou ${reais(falta)} de comissão além do cartão — cobrar por outro meio.</div>` : "";
+      ? `<div class="alerta" style="margin-top:8px">⚠️ Faltou ${reais(falta)} de comissão além do cartão — descontar do Pix da funcionária.</div>` : "";
     cards.push(`<div class="card-func">
       <div class="card-cab card-toggle">
         <span class="card-nome"><span class="seta">▸</span> ${escapar(u.nome)}</span>
@@ -659,7 +712,7 @@ async function carregarAlertaPendentes() {
     const k = l.usuarioId + "|" + l.data;
     (grupos[k] = grupos[k] || { data: l.data, nome: l.nome, valor: 0 }).valor += receberDe(l, compMap[l.usuarioId]);
   });
-  const lista = Object.values(grupos).sort((a, b) => a.data.localeCompare(b.data));
+  const lista = Object.values(grupos).filter(x => x.valor > 0.005).sort((a, b) => a.data.localeCompare(b.data));
   if (!lista.length) { el.classList.add("oculto"); el.innerHTML = ""; return; }
   el.classList.remove("oculto");
   el.innerHTML = `⚠️ <strong>Atenção:</strong> há dias anteriores não pagos. Clique para ir até o dia e pagar:

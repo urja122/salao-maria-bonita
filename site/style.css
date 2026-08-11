@@ -225,6 +225,10 @@ button{font-family:var(--fonte-corpo)}
 .linha-detalhe{display:flex;justify-content:space-between;gap:10px;font-size:.9rem;padding:8px 0;border-bottom:1px dashed var(--borda);color:var(--texto)}
 .linha-detalhe:last-child{border-bottom:none}
 .linha-detalhe strong{color:var(--gold-2)}
+.linha-cinza{opacity:.5}
+.linha-cinza strong{color:var(--texto-fraco)}
+.mini-cinza{font-size:.7rem;color:var(--texto-fraco);font-style:italic}
+.participante{border:1px dashed var(--gold-borda);border-radius:12px;padding:12px;margin-top:10px}
 .info-funcionaria{display:flex;flex-direction:column;gap:2px}
 .info-funcionaria .card-nome{font-size:1.08rem}
 .badge-tipo{font-size:.7rem;padding:3px 10px;border-radius:20px;background:var(--gold-soft);color:var(--gold-2);border:1px solid var(--gold-borda);font-weight:600}
