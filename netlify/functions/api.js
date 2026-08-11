@@ -120,7 +120,7 @@ function toApi(row) {
     data: row.data, descricao: row.descricao, valor: Number(row.valor), forma: row.forma,
     comissaoSalao: Number(row.comissao_salao), valorFuncionaria: Number(row.valor_funcionaria),
     regra: row.regra, comprovante: row.comprovante, pago: row.pago, criadoEm: row.criado_em,
-    commQuitada: row.comm_quitada !== false
+    commQuitada: row.comm_quitada !== false, grupo: row.grupo || null
   };
 }
 
@@ -225,17 +225,19 @@ exports.handler = async (event) => {
     // Retorna SÓ a quantidade de serviços por funcionária (nunca valores).
     // O faturamento é usado apenas como critério de desempate, no servidor.
     if (sub === "/ranking" && metodo === "GET") {
-      const filtros = ["select=usuario_id,nome,tipo,valor"];
+      const filtros = ["select=id,usuario_id,nome,tipo,valor,grupo"];
       if (q.de) filtros.push(`data=gte.${q.de}`);
       if (q.ate) filtros.push(`data=lte.${q.ate}`);
       const rows = await sb("lancamentos?" + filtros.join("&"));
       const mapa = {};
+      const vistos = {}; // por funcionária: chaves de serviço já contados (dividido conta 1x)
       rows.forEach(r => {
         if (r.tipo !== "manicure" && r.tipo !== "cabeleireira") return;
         const k = r.usuario_id;
-        if (!mapa[k]) mapa[k] = { nome: r.nome, quantidade: 0, _fat: 0 };
-        mapa[k].quantidade++;
-        mapa[k]._fat += Number(r.valor) || 0;
+        if (!mapa[k]) { mapa[k] = { nome: r.nome, quantidade: 0, _fat: 0 }; vistos[k] = new Set(); }
+        mapa[k]._fat += Number(r.valor) || 0;           // faturamento soma todas as partes
+        const chave = r.grupo || r.id;                  // serviço dividido = 1 só no ranking
+        if (!vistos[k].has(chave)) { vistos[k].add(chave); mapa[k].quantidade++; }
       });
       const arr = Object.values(mapa);
       const porServicos = arr.slice()
@@ -340,10 +342,22 @@ exports.handler = async (event) => {
     // ---------- LANÇAMENTOS ----------
     if (sub === "/lancamentos" && metodo === "POST") {
       const descricao = (corpo.descricao || "").trim();
-      const valor = round2(corpo.valor);
-      const forma = ["pix", "cartao", "dinheiro"].includes(corpo.forma) ? corpo.forma : "pix";
       if (!descricao) return resp(400, { erro: "Descreva o serviço." });
-      if (!(valor > 0)) return resp(400, { erro: "Informe um valor válido." });
+
+      // Uma ou várias formas de pagamento na MESMA venda.
+      // corpo.pagamentos = [{forma, valor}, ...]  (dividido)  OU  corpo.forma + corpo.valor (forma única)
+      let pagamentos;
+      if (Array.isArray(corpo.pagamentos) && corpo.pagamentos.length) {
+        pagamentos = corpo.pagamentos
+          .map(p => ({ forma: ["pix", "cartao", "dinheiro"].includes(p.forma) ? p.forma : "pix", valor: round2(p.valor) }))
+          .filter(p => p.valor > 0);
+      } else {
+        const forma = ["pix", "cartao", "dinheiro"].includes(corpo.forma) ? corpo.forma : "pix";
+        pagamentos = [{ forma, valor: round2(corpo.valor) }];
+      }
+      if (!pagamentos.length) return resp(400, { erro: "Informe um valor válido." });
+      const total = round2(pagamentos.reduce((s, p) => s + p.valor, 0));
+      if (!(total > 0)) return resp(400, { erro: "Informe um valor válido." });
 
       let dono = { id: atual.id, nome: atual.nome, tipo: atual.tipo, compensa: atual.compensa };
       if (ehAdmin && corpo.usuarioId) {
@@ -352,36 +366,54 @@ exports.handler = async (event) => {
       }
       const cfg = await getConfig();
       const servicos = await sb("servicos?select=*&ativo=eq.true");
-      const c = calcularComissao(dono.tipo, descricao, valor, cfg, servicos);
+      // Comissão é calculada UMA vez sobre o valor total do serviço.
+      const cTotal = calcularComissao(dono.tipo, descricao, total, cfg, servicos);
       const compensaDono = dono.compensa_dinheiro !== undefined ? !!dono.compensa_dinheiro : !!dono.compensa;
 
+      // Comprovante é enviado uma vez e vale para todas as partes.
       let comprovante = null, comprovanteHash = null;
       if (corpo.comprovanteBase64) {
         const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/.exec(corpo.comprovanteBase64);
         if (m) {
           const buf = Buffer.from(m[2], "base64");
           comprovanteHash = crypto.createHash("sha256").update(buf).digest("hex");
-          // detecta comprovante duplicado (mesma foto já enviada)
-          try {
-            const iguais = await sb(`lancamentos?select=nome,descricao&comprovante_hash=eq.${comprovanteHash}&limit=1`);
-            if (iguais.length) {
-              const d = iguais[0];
-              return resp(409, { erro: `Esse comprovante já foi enviado (serviço "${d.descricao}" de ${d.nome}). Se for outro serviço, tire outra foto.` });
-            }
-          } catch (e) {}
+          // duplicado só é checado quando é forma única (no dividido a mesma foto é reutilizada de propósito)
+          if (pagamentos.length === 1) {
+            try {
+              const iguais = await sb(`lancamentos?select=nome,descricao&comprovante_hash=eq.${comprovanteHash}&limit=1`);
+              if (iguais.length) {
+                const d = iguais[0];
+                return resp(409, { erro: `Esse comprovante já foi enviado (serviço "${d.descricao}" de ${d.nome}). Se for outro serviço, tire outra foto.` });
+              }
+            } catch (e) {}
+          }
           const ext = "." + m[1].split("/")[1].replace("jpeg", "jpg").replace("+xml", "");
           comprovante = await sbUpload(novoId("cmp") + ext, buf, m[1]);
         }
       }
-      const row = {
-        id: novoId("l"), usuario_id: dono.id, nome: dono.nome, tipo: dono.tipo,
-        data: corpo.data || new Date().toISOString().slice(0, 10),
-        descricao, valor, forma, comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria,
-        regra: c.regra, comprovante, comprovante_hash: comprovanteHash, pago: false,
-        comm_quitada: !(compensaDono && forma === "dinheiro")
-      };
-      const inserido = await sb("lancamentos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) });
-      return resp(200, toApi(inserido[0]));
+
+      // Rateia a comissão do serviço proporcionalmente entre as formas de pagamento.
+      // A última parte absorve o arredondamento para o total bater exatamente.
+      const grupo = pagamentos.length > 1 ? novoId("g") : null;
+      const dataLanc = corpo.data || new Date().toISOString().slice(0, 10);
+      const rows = [];
+      let comAcc = 0;
+      pagamentos.forEach((p, i) => {
+        const comissao = i === pagamentos.length - 1
+          ? round2(cTotal.comissaoSalao - comAcc)
+          : round2(cTotal.comissaoSalao * p.valor / total);
+        comAcc = round2(comAcc + comissao);
+        rows.push({
+          id: novoId("l"), usuario_id: dono.id, nome: dono.nome, tipo: dono.tipo,
+          data: dataLanc, descricao, valor: p.valor, forma: p.forma,
+          comissao_salao: comissao, valor_funcionaria: round2(p.valor - comissao),
+          regra: cTotal.regra, comprovante, comprovante_hash: comprovanteHash,
+          grupo, pago: false,
+          comm_quitada: !(compensaDono && p.forma === "dinheiro")
+        });
+      });
+      const inseridos = await sb("lancamentos", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(rows) });
+      return resp(200, pagamentos.length === 1 ? toApi(inseridos[0]) : inseridos.map(toApi));
     }
 
     // ---------- PAGAMENTO CONJUNTO (uma pessoa lança, vai para todas) ----------
