@@ -439,6 +439,8 @@ exports.handler = async (event) => {
           comprovante = await sbUpload(novoId("cmp") + ext, buf, m[1]);
         }
       }
+      // marca todas as partes como do mesmo pagamento conjunto (prefixo "cj_")
+      const grupoConj = parts.length > 1 ? novoId("cj") : null;
       const rows = [];
       for (const p of parts) {
         const dono = usuarios.find(u => u.id === p.usuarioId);
@@ -449,7 +451,7 @@ exports.handler = async (event) => {
           id: novoId("l"), usuario_id: dono.id, nome: dono.nome, tipo: dono.tipo,
           data, descricao: String(p.descricao).trim(), valor, forma,
           comissao_salao: c.comissaoSalao, valor_funcionaria: c.valorFuncionaria, regra: c.regra,
-          comprovante, comprovante_hash: comprovanteHash, pago: false,
+          comprovante, comprovante_hash: comprovanteHash, grupo: grupoConj, pago: false,
           comm_quitada: !(!!dono.compensa_dinheiro && forma === "dinheiro")
         });
       }
