@@ -50,8 +50,10 @@
           <label>Descrição do serviço</label>
           <input id="serv-descricao" type="text" placeholder="Ex.: Esmaltação em gel" required />
 
-          <label>Valor cobrado (R$)</label>
-          <input id="serv-valor" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00" required />
+          <div id="bloco-valor">
+            <label>Valor cobrado (R$)</label>
+            <input id="serv-valor" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00" required />
+          </div>
 
           <label class="opcao" style="justify-content:flex-start;gap:10px;margin-top:12px;margin-bottom:0">
             <input type="checkbox" id="serv-conjunto" /> Pagamento conjunto (fiz com outra pessoa)
@@ -62,11 +64,24 @@
             <button type="button" id="conjunto-add" class="btn-secundario">+ adicionar funcionária</button>
           </div>
 
-          <label>Forma de pagamento</label>
-          <div class="opcoes-pagamento">
-            <label class="opcao"><input type="radio" name="forma" value="pix" checked /> Pix</label>
-            <label class="opcao"><input type="radio" name="forma" value="dinheiro" /> Dinheiro</label>
-            <label class="opcao"><input type="radio" name="forma" value="cartao" /> Cartão</label>
+          <label class="opcao" style="justify-content:flex-start;gap:10px;margin-top:12px;margin-bottom:0">
+            <input type="checkbox" id="serv-multi" /> Pagou em mais de uma forma (dividido)
+          </label>
+          <div id="multi-box" class="oculto">
+            <p class="dica" style="margin-top:8px">Digite quanto a cliente pagou em cada forma. Deixe em branco a que não usou. O total é somado sozinho.</p>
+            <div class="mv-linha"><span>Pix</span><input id="mv-pix" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00" /></div>
+            <div class="mv-linha"><span>Dinheiro</span><input id="mv-dinheiro" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00" /></div>
+            <div class="mv-linha"><span>Cartão</span><input id="mv-cartao" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0,00" /></div>
+            <p class="mv-total">Total do serviço: <strong id="mv-total-val">R$ 0,00</strong></p>
+          </div>
+
+          <div id="bloco-forma">
+            <label>Forma de pagamento</label>
+            <div class="opcoes-pagamento">
+              <label class="opcao"><input type="radio" name="forma" value="pix" checked /> Pix</label>
+              <label class="opcao"><input type="radio" name="forma" value="dinheiro" /> Dinheiro</label>
+              <label class="opcao"><input type="radio" name="forma" value="cartao" /> Cartão</label>
+            </div>
           </div>
 
           <label>Foto do comprovante</label>

@@ -229,6 +229,14 @@ button{font-family:var(--fonte-corpo)}
 .linha-cinza strong{color:var(--texto-fraco)}
 .mini-cinza{font-size:.7rem;color:var(--texto-fraco);font-style:italic}
 .participante{border:1px dashed var(--gold-borda);border-radius:12px;padding:12px;margin-top:10px}
+#multi-box{border:1px dashed var(--gold-borda);border-radius:12px;padding:6px 14px 12px;margin-top:8px}
+.mv-linha{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0}
+.mv-linha span{color:var(--texto-fraco);font-size:.9rem;min-width:80px}
+.mv-linha input{flex:1;max-width:170px;margin:0}
+.mv-total{margin:12px 0 2px;text-align:right;color:var(--texto-fraco);font-size:.9rem}
+.mv-total strong{color:var(--gold-2);font-size:1.05rem;margin-left:6px}
+.tag-dividido{color:#e6b3ff;border:1px solid rgba(200,140,255,.4);background:rgba(200,140,255,.10);
+  font-size:.66rem;padding:2px 8px;border-radius:20px;font-weight:700;margin-left:4px}
 .info-funcionaria{display:flex;flex-direction:column;gap:2px}
 .info-funcionaria .card-nome{font-size:1.08rem}
 .badge-tipo{font-size:.7rem;padding:3px 10px;border-radius:20px;background:var(--gold-soft);color:var(--gold-2);border:1px solid var(--gold-borda);font-weight:600}

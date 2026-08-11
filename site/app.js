@@ -182,8 +182,10 @@ $("#form-servico").addEventListener("submit", async (e) => {
   if (botao.disabled) return;                 // trava contra duplo clique
   botao.disabled = true; botao.textContent = "Salvando...";
   const forma = document.querySelector('input[name="forma"]:checked').value;
+  const ehConjunto = $("#serv-conjunto") && $("#serv-conjunto").checked;
+  const ehMulti = $("#serv-multi") && $("#serv-multi").checked;
   try {
-    if ($("#serv-conjunto") && $("#serv-conjunto").checked) {
+    if (ehConjunto) {
       const participantes = [{ usuarioId: USUARIO.id, descricao: $("#serv-descricao").value, valor: $("#serv-valor").value }];
       $$(".participante").forEach(p => participantes.push({
         usuarioId: p.querySelector(".cj-func").value,
@@ -193,6 +195,22 @@ $("#form-servico").addEventListener("submit", async (e) => {
       await api("/api/lancamentos-conjunto", {
         method: "POST",
         body: JSON.stringify({ forma, data: hojeStr(), comprovanteBase64: fotoBase64, participantes })
+      });
+    } else if (ehMulti) {
+      const pagamentos = [
+        { forma: "pix", valor: Number($("#mv-pix").value) || 0 },
+        { forma: "dinheiro", valor: Number($("#mv-dinheiro").value) || 0 },
+        { forma: "cartao", valor: Number($("#mv-cartao").value) || 0 }
+      ].filter(p => p.valor > 0);
+      if (pagamentos.length < 2) throw new Error("No pagamento dividido, preencha ao menos duas formas. Se for uma só, desmarque a opção.");
+      await api("/api/lancamentos", {
+        method: "POST",
+        body: JSON.stringify({
+          descricao: $("#serv-descricao").value,
+          pagamentos,
+          data: hojeStr(),
+          comprovanteBase64: fotoBase64
+        })
       });
     } else {
       await api("/api/lancamentos", {
@@ -209,6 +227,7 @@ $("#form-servico").addEventListener("submit", async (e) => {
     $("#form-servico").reset();
     $("#conjunto-box").classList.add("oculto");
     $("#conjunto-lista").innerHTML = "";
+    resetMultiPagamento();
     $("#serv-previa").classList.add("oculto");
     fotoBase64 = null;
     msg.textContent = "Serviço salvo! ✔";
@@ -225,7 +244,42 @@ $("#form-servico").addEventListener("submit", async (e) => {
 // ---------- Pagamento conjunto (UI) ----------
 if ($("#serv-conjunto")) $("#serv-conjunto").addEventListener("change", (e) => {
   $("#conjunto-box").classList.toggle("oculto", !e.target.checked);
-  if (e.target.checked && !$("#conjunto-lista").children.length) addParticipante();
+  if (e.target.checked) {
+    // conjunto e dividido não se combinam: desliga o dividido
+    if ($("#serv-multi") && $("#serv-multi").checked) { $("#serv-multi").checked = false; aplicarMultiPagamento(false); }
+    if (!$("#conjunto-lista").children.length) addParticipante();
+  }
+});
+
+// ---------- Pagamento dividido / várias formas (UI) ----------
+function aplicarMultiPagamento(ligado) {
+  $("#multi-box").classList.toggle("oculto", !ligado);
+  $("#bloco-forma").classList.toggle("oculto", ligado);   // no dividido, a forma vem dos campos
+  $("#bloco-valor").classList.toggle("oculto", ligado);   // no dividido, o total é a soma
+  const val = $("#serv-valor");
+  if (ligado) val.removeAttribute("required"); else val.setAttribute("required", "");
+}
+function resetMultiPagamento() {
+  if (!$("#serv-multi")) return;
+  $("#serv-multi").checked = false;
+  ["#mv-pix", "#mv-dinheiro", "#mv-cartao"].forEach(s => { if ($(s)) $(s).value = ""; });
+  atualizarTotalMulti();
+  aplicarMultiPagamento(false);
+}
+function atualizarTotalMulti() {
+  if (!$("#mv-total-val")) return;
+  const t = ["#mv-pix", "#mv-dinheiro", "#mv-cartao"].reduce((s, sel) => s + (Number($(sel).value) || 0), 0);
+  $("#mv-total-val").textContent = reais(t);
+}
+if ($("#serv-multi")) $("#serv-multi").addEventListener("change", (e) => {
+  aplicarMultiPagamento(e.target.checked);
+  if (e.target.checked && $("#serv-conjunto") && $("#serv-conjunto").checked) {
+    $("#serv-conjunto").checked = false;
+    $("#conjunto-box").classList.add("oculto");
+  }
+});
+["#mv-pix", "#mv-dinheiro", "#mv-cartao"].forEach(sel => {
+  if ($(sel)) $(sel).addEventListener("input", atualizarTotalMulti);
 });
 if ($("#conjunto-add")) $("#conjunto-add").addEventListener("click", () => addParticipante());
 function addParticipante() {
@@ -293,7 +347,7 @@ function itemLancamentoHtml(l, podeExcluir, compensa) {
   return `<div class="item">
     ${foto}
     <div class="item-info">
-      <div class="item-desc">${escapar(l.descricao)}</div>
+      <div class="item-desc">${escapar(l.descricao)}${l.grupo ? ' <span class="tag tag-dividido">dividido</span>' : ""}</div>
       <div class="item-sub">${tag}${pago} · ${(compensa && l.forma === "dinheiro") ? `recebido na hora ${reais(l.valor)}` : `você recebe ${reais(receberDe(l, compensa))}`} ${editar} ${excluir}</div>
     </div>
     <div class="item-valor">${reais(l.valor)}</div>
