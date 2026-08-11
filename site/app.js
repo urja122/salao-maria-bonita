@@ -334,6 +334,13 @@ async function carregarMeuDia() {
 }
 
 // HTML de um lançamento na lista
+// selo de agrupamento: "conjunto" (prefixo cj_) ou "dividido" (demais grupos)
+function tagGrupoHtml(l) {
+  if (!l.grupo) return "";
+  return String(l.grupo).startsWith("cj_")
+    ? ' <span class="tag tag-conjunto">conjunto</span>'
+    : ' <span class="tag tag-dividido">dividido</span>';
+}
 function itemLancamentoHtml(l, podeExcluir, compensa) {
   const foto = l.comprovante
     ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}" alt="comprovante">`
@@ -347,7 +354,7 @@ function itemLancamentoHtml(l, podeExcluir, compensa) {
   return `<div class="item">
     ${foto}
     <div class="item-info">
-      <div class="item-desc">${escapar(l.descricao)}${l.grupo ? ' <span class="tag tag-dividido">dividido</span>' : ""}</div>
+      <div class="item-desc">${escapar(l.descricao)}${tagGrupoHtml(l)}</div>
       <div class="item-sub">${tag}${pago} · ${(compensa && l.forma === "dinheiro") ? `recebido na hora ${reais(l.valor)}` : `você recebe ${reais(receberDe(l, compensa))}`} ${editar} ${excluir}</div>
     </div>
     <div class="item-valor">${reais(l.valor)}</div>
@@ -461,7 +468,7 @@ function cardPagamentoHtml(u, itens, total, tudoPago, data) {
     const valExib = dinCompensa ? l.valor : receberDe(l, u.compensa);
     return `<div class="linha-detalhe ${dinCompensa ? "linha-cinza" : ""}">
       <span>${l.comprovante ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}">` : ""}
-        ${escapar(l.descricao)} <span class="tag tag-${l.forma}">${l.forma === "pix" ? "Pix" : "Dinheiro"}</span>
+        ${escapar(l.descricao)} <span class="tag tag-${l.forma}">${l.forma === "pix" ? "Pix" : "Dinheiro"}</span>${tagGrupoHtml(l)}
         ${dinCompensa ? '<span class="mini-cinza">recebido na hora</span>' : ""}
         ${l.pago ? "" : linkEditarHtml(l)}</span>
       <span class="valor-conta"><strong>${reais(valExib)}</strong>${contaHtml(l, u.compensa)}</span>
