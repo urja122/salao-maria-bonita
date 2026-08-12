@@ -705,16 +705,30 @@ async function carregarMeuMes() {
   if (!$("#func-mes").value) $("#func-mes").value = mesAtual();
   const { de, ate } = limitesMes($("#func-mes").value);
   const lancs = await api(`/api/lancamentos?de=${de}&ate=${ate}`);
-  const porDia = {};
-  let recebido = 0, pendente = 0;
   const compensa = !!USUARIO.compensa;
-  lancs.filter(l => l.forma !== "cartao").forEach(l => {
-    const v = receberDe(l, compensa);
-    const d = porDia[l.data] = porDia[l.data] || { data: l.data, total: 0, pago: true };
-    d.total += v;
-    if (!l.pago) d.pago = false;
-    if (l.pago) recebido += v; else pendente += v;
+  // "Já recebi" = dinheiro (sempre, pego na hora) + pix e cartão SÓ quando marcados como pago.
+  // O método cartão NÃO muda isso — ele só decide se a comissão do dinheiro sai do cartão.
+  let recebido = 0, pendente = 0, dividaDin = 0;
+  const porDia = {};
+  lancs.forEach(l => {
+    let recNow = 0;
+    if (l.forma === "dinheiro") {
+      // dinheiro conta sempre, nos dois métodos.
+      // método ligado: pegou o valor cheio (a comissão sai do cartão). método desligado: a parte dela.
+      recNow = compensa ? l.valor : l.valorFuncionaria;
+      recebido += recNow;
+      if (compensa && l.commQuitada === false) dividaDin += l.comissaoSalao;
+    } else {
+      // pix e cartão: só contam depois de marcados como pago
+      if (l.pago) { recNow = l.valorFuncionaria; recebido += recNow; }
+      else pendente += l.valorFuncionaria;
+    }
+    if (recNow > 0) {
+      const d = porDia[l.data] = porDia[l.data] || { data: l.data, total: 0 };
+      d.total += recNow;
+    }
   });
+  pendente = Math.max(0, pendente - dividaDin);
   $("#func-mes-recebido").textContent = reais(recebido);
   $("#func-mes-pendente").textContent = reais(pendente);
   const dias = Object.values(porDia).sort((a, b) => b.data.localeCompare(a.data));
@@ -722,9 +736,6 @@ async function carregarMeuMes() {
   cont.innerHTML = dias.length ? dias.map(d => `
     <div class="card-func rank-linha">
       <span class="rank-nome">${dataBonita(d.data)}</span>
-      <span>${d.pago
-        ? '<span class="pago-selo">✔ pago</span>'
-        : '<span class="tag" style="background:var(--amarelo-bg);color:var(--amarelo)">pendente</span>'}</span>
       <span class="rank-qtd">${reais(d.total)}</span>
     </div>`).join("") :
     '<div class="vazio">Nenhum serviço neste mês.</div>';
