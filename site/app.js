@@ -600,12 +600,17 @@ async function carregarLucro() {
 
   const grupos = {};
   let total = 0;
+  const porForma = { pix: 0, cartao: 0, dinheiro: 0 };
   lancs.forEach(l => {
     (grupos[l.usuarioId] = grupos[l.usuarioId] || []).push(l);
     total += l.comissaoSalao;
+    if (porForma[l.forma] !== undefined) porForma[l.forma] += l.comissaoSalao;
   });
 
   $("#lucro-total").textContent = reais(total);
+  $("#lucro-pix").textContent = reais(porForma.pix);
+  $("#lucro-cartao").textContent = reais(porForma.cartao);
+  $("#lucro-dinheiro").textContent = reais(porForma.dinheiro);
   const cont = $("#adm-lucro");
   const cards = [];
   usuarios.filter(ehFuncionaria).forEach(u => {
