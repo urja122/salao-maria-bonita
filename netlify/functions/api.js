@@ -467,7 +467,22 @@ exports.handler = async (event) => {
       if (q.de) filtros.push(`data=gte.${q.de}`);
       if (q.ate) filtros.push(`data=lte.${q.ate}`);
       const rows = await sb("lancamentos?" + filtros.join("&"));
-      return resp(200, rows.map(toApi));
+      // enriquece os lançamentos de pagamento conjunto (cj_) com os nomes dos outros participantes
+      const gruposCj = [...new Set(rows.filter(r => r.grupo && String(r.grupo).startsWith("cj_")).map(r => r.grupo))];
+      const membros = {};
+      if (gruposCj.length) {
+        const lista = gruposCj.map(g => `"${g}"`).join(",");
+        const ms = await sb(`lancamentos?select=grupo,usuario_id,nome&grupo=in.(${lista})`);
+        ms.forEach(m => { (membros[m.grupo] = membros[m.grupo] || []).push(m); });
+      }
+      const out = rows.map(r => {
+        const a = toApi(r);
+        if (r.grupo && membros[r.grupo]) {
+          a.conjuntoCom = [...new Set(membros[r.grupo].filter(m => m.usuario_id !== r.usuario_id).map(m => m.nome))];
+        }
+        return a;
+      });
+      return resp(200, out);
     }
 
     if (sub.startsWith("/lancamentos/") && metodo === "PUT") {
@@ -501,6 +516,21 @@ exports.handler = async (event) => {
       await sbDeleteObj(l.comprovante);
       await sb(`lancamentos?id=eq.${id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
       return resp(200, { ok: true });
+    }
+
+    // ---------- ACERTAR COMISSÃO DO DINHEIRO (método cartão), uma a uma ----------
+    // Marca (ou desmarca) a comissão de um lançamento de dinheiro como já quitada,
+    // pra ela parar (ou voltar) a descontar do cartão. Corrige débito duplicado.
+    if (sub === "/comissao-acertar" && metodo === "POST") {
+      if (!ehGestor) return resp(403, { erro: "Sem permissão." });
+      const id = corpo.id;
+      if (!id) return resp(400, { erro: "Informe o lançamento." });
+      const l = (await sb(`lancamentos?select=*&id=eq.${id}`))[0];
+      if (!l) return resp(404, { erro: "Lançamento não encontrado." });
+      if (l.forma !== "dinheiro") return resp(400, { erro: "Só comissões de dinheiro entram nesse acerto." });
+      const quitada = corpo.quitada !== false; // padrão: marcar como quitada
+      const upd = await sb(`lancamentos?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ comm_quitada: quitada }) });
+      return resp(200, toApi(upd[0]));
     }
 
     // ---------- PAGAR / REABRIR ----------
