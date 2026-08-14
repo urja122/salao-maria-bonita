@@ -118,9 +118,10 @@
       </div>
       <div class="resumo-func">
         <div class="chip"><span>Já recebi no mês</span><strong id="func-mes-recebido">R$ 0,00</strong></div>
-        <div class="chip chip-cartao"><span>Falta receber (pendente)</span><strong id="func-mes-pendente">R$ 0,00</strong></div>
+        <div class="chip chip-cartao chip-clicavel" id="chip-func-pendente"><span>Falta receber (pendente) <small class="ver-hint">toque para ver ▾</small></span><strong id="func-mes-pendente">R$ 0,00</strong></div>
       </div>
-      <p class="dica">Cada dia mostra se já foi pago ou está pendente. Dias não pagos vão acumulando até serem quitados.</p>
+      <div id="func-mes-pendente-lista" class="lista oculto"></div>
+      <p class="dica">O que está pendente vira "recebido" quando o pagamento é marcado como pago. Toque em "Falta receber" para ver os serviços pendentes e os comprovantes.</p>
       <div id="func-mes-lista" class="lista-cards"></div>
     </div>
   </section>

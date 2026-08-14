@@ -239,6 +239,15 @@ button{font-family:var(--fonte-corpo)}
   font-size:.66rem;padding:2px 8px;border-radius:20px;font-weight:700;margin-left:4px}
 .tag-conjunto{color:#8fdcff;border:1px solid rgba(120,200,255,.4);background:rgba(120,200,255,.10);
   font-size:.66rem;padding:2px 8px;border-radius:20px;font-weight:700;margin-left:4px}
+.chip-clicavel{cursor:pointer;transition:.15s}
+.chip-clicavel:hover{border-color:var(--gold-2)}
+.ver-hint{font-size:.6rem;opacity:.75;text-transform:none;letter-spacing:0}
+.chip-clicavel.aberto .ver-hint::after{content:" (aberto)"}
+.acertos{margin-top:10px;border-top:1px dashed var(--gold-borda);padding-top:8px}
+.acertos-tit{font-size:.8rem;color:var(--gold-2);font-weight:600;margin-bottom:4px}
+.btn-mini{background:var(--gold-soft);border:1px solid var(--gold-borda);color:var(--gold-2);
+  padding:5px 11px;border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s}
+.btn-mini:hover{border-color:var(--gold-2);background:rgba(201,162,39,.2)}
 .info-funcionaria{display:flex;flex-direction:column;gap:2px}
 .info-funcionaria .card-nome{font-size:1.08rem}
 .badge-tipo{font-size:.7rem;padding:3px 10px;border-radius:20px;background:var(--gold-soft);color:var(--gold-2);border:1px solid var(--gold-borda);font-weight:600}

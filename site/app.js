@@ -334,12 +334,30 @@ async function carregarMeuDia() {
 }
 
 // HTML de um lançamento na lista
-// selo de agrupamento: "conjunto" (prefixo cj_) ou "dividido" (demais grupos)
+// selo de agrupamento: "conjunto com X" (prefixo cj_) ou "dividido" (demais grupos)
 function tagGrupoHtml(l) {
   if (!l.grupo) return "";
-  return String(l.grupo).startsWith("cj_")
-    ? ' <span class="tag tag-conjunto">conjunto</span>'
-    : ' <span class="tag tag-dividido">dividido</span>';
+  if (String(l.grupo).startsWith("cj_")) {
+    const com = (l.conjuntoCom && l.conjuntoCom.length)
+      ? " com " + l.conjuntoCom.map(escapar).join(", ") : "";
+    return ` <span class="tag tag-conjunto">conjunto${com}</span>`;
+  }
+  return ' <span class="tag tag-dividido">dividido</span>';
+}
+// item pendente (só leitura) — mostra data, forma, comprovante e quanto ela vai receber
+function itemPendenteHtml(l) {
+  const foto = l.comprovante
+    ? `<img class="mini-foto" src="${l.comprovante}" data-full="${l.comprovante}" alt="comprovante">`
+    : `<div class="sem-foto">—</div>`;
+  const tagForma = `<span class="tag tag-${l.forma}">${l.forma === "cartao" ? "Cartão" : l.forma === "pix" ? "Pix" : "Dinheiro"}</span>`;
+  return `<div class="item">
+    ${foto}
+    <div class="item-info">
+      <div class="item-desc">${escapar(l.descricao)}${tagGrupoHtml(l)}</div>
+      <div class="item-sub">${dataBonita(l.data)} · ${tagForma} · a receber ${reais(l.valorFuncionaria)}</div>
+    </div>
+    <div class="item-valor">${reais(l.valor)}</div>
+  </div>`;
 }
 function itemLancamentoHtml(l, podeExcluir, compensa) {
   const foto = l.comprovante
@@ -525,6 +543,7 @@ $("#cartao-tudo").addEventListener("click", () => {
 
 async function carregarCartaoAcumulado() {
   const de = $("#cartao-de").value, ate = $("#cartao-ate").value;
+  const temFiltro = !!(de || ate);
   const lancs = await api("/api/lancamentos");
   const usuarios = await api("/api/usuarios");
   const porFunc = {};
@@ -540,9 +559,21 @@ async function carregarCartaoAcumulado() {
   let totalGeral = 0;
   usuarios.filter(ehFuncionaria).forEach(u => {
     const itens = (porFunc[u.id] || []).slice().sort((a, b) => a.data.localeCompare(b.data));
-    if (!itens.length) return;
+    // comissões de dinheiro (método cartão) ainda penduradas = as que descontam do cartão
+    const dinPend = u.compensa
+      ? lancs.filter(l => l.usuarioId === u.id && l.forma === "dinheiro" && l.commQuitada === false)
+             .slice().sort((a, b) => a.data.localeCompare(b.data))
+      : [];
+    // comissões já acertadas (para desfazer) — limitadas ao filtro de datas, senão as 12 últimas
+    const dinAcert = u.compensa
+      ? lancs.filter(l => l.usuarioId === u.id && l.forma === "dinheiro" && l.commQuitada !== false
+              && (!de || l.data >= de) && (!ate || l.data <= ate))
+             .slice().sort((a, b) => b.data.localeCompare(a.data)).slice(0, 12)
+      : [];
+    if (!itens.length && !dinPend.length && !(temFiltro && dinAcert.length)) return;
+
     const brutoBase = itens.reduce((s, l) => s + l.valorFuncionaria, 0);
-    const divida = dividaCartaoDe(lancs.filter(l => l.usuarioId === u.id), u.compensa);
+    const divida = dinPend.reduce((s, l) => s + l.comissaoSalao, 0);
     const bruto = Math.max(0, brutoBase - divida);
     const falta = Math.max(0, divida - brutoBase);
     const liquido = bruto * (1 - (CONFIG.descontoCartao || 0.10));
@@ -557,6 +588,24 @@ async function carregarCartaoAcumulado() {
       ? `<div class="linha-detalhe"><span>− Comissão do dinheiro (método cartão)</span><strong>-${reais(divida)}</strong></div>` : "";
     const avisoFalta = falta > 0
       ? `<div class="alerta" style="margin-top:8px">⚠️ Faltou ${reais(falta)} de comissão além do cartão — descontar do Pix da funcionária.</div>` : "";
+    // bloco para acertar as comissões de dinheiro uma a uma
+    const acertosPend = dinPend.length ? `
+      <div class="acertos-tit">Comissões de dinheiro a acertar:</div>
+      ${dinPend.map(l => `
+        <div class="linha-detalhe">
+          <span>${dataBonita(l.data)} · ${escapar(l.descricao)} <small class="conta">comissão ${reais(l.comissaoSalao)}</small></span>
+          <button class="btn-mini" data-acertar="${l.id}">já acertei</button>
+        </div>`).join("")}
+      <div class="dica" style="margin-top:6px">Use "já acertei" quando você já descontou essa comissão do Pix dela. Assim ela para de descontar do cartão.</div>` : "";
+    const acertosFeitos = dinAcert.length ? `
+      <div class="acertos-tit" style="margin-top:8px">Já acertadas${temFiltro ? " (no período)" : ""}:</div>
+      ${dinAcert.map(l => `
+        <div class="linha-detalhe linha-cinza">
+          <span>${dataBonita(l.data)} · ${escapar(l.descricao)} <small class="conta">comissão ${reais(l.comissaoSalao)}</small></span>
+          <button class="btn-mini" data-desfazer="${l.id}">desfazer</button>
+        </div>`).join("")}` : "";
+    const acertos = (acertosPend || acertosFeitos)
+      ? `<div class="acertos">${acertosPend}${acertosFeitos}</div>` : "";
     cards.push(`<div class="card-func">
       <div class="card-cab card-toggle">
         <span class="card-nome"><span class="seta">▸</span> ${escapar(u.nome)}</span>
@@ -565,9 +614,10 @@ async function carregarCartaoAcumulado() {
       <div class="card-detalhe oculto">
         ${linhas}
         ${linhaDivida}
-        <div class="linha-detalhe"><span>Líquido a sacar (−${Math.round((CONFIG.descontoCartao||0.10)*100)}% maquineta)</span><strong>${reais(liquido)}</strong></div>
+        ${itens.length ? `<div class="linha-detalhe"><span>Líquido a sacar (−${Math.round((CONFIG.descontoCartao||0.10)*100)}% maquineta)</span><strong>${reais(liquido)}</strong></div>` : ""}
         ${avisoFalta}
-        <div class="acoes"><button class="btn-verde" data-pagar-cartao="${u.id}">Pagar acumulado e zerar</button></div>
+        ${acertos}
+        ${itens.length ? `<div class="acoes"><button class="btn-verde" data-pagar-cartao="${u.id}">Pagar acumulado e zerar</button></div>` : ""}
       </div>
     </div>`);
   });
@@ -581,6 +631,20 @@ async function carregarCartaoAcumulado() {
     if (!confirm("Confirmar pagamento do cartão acumulado e zerar? (paga TODO o cartão pendente da funcionária)")) return;
     await api("/api/pagar", { method: "POST", body: JSON.stringify({ usuarioId: b.dataset.pagarCartao, escopo: "cartao" }) });
     carregarCartaoAcumulado();
+  }));
+  cont.querySelectorAll("[data-acertar]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Marcar esta comissão como já acertada? Ela vai parar de descontar do cartão.")) return;
+    try {
+      await api("/api/comissao-acertar", { method: "POST", body: JSON.stringify({ id: b.dataset.acertar, quitada: true }) });
+      carregarCartaoAcumulado();
+    } catch (e) { alert(e.message); }
+  }));
+  cont.querySelectorAll("[data-desfazer]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Desfazer o acerto? Essa comissão volta a descontar do cartão.")) return;
+    try {
+      await api("/api/comissao-acertar", { method: "POST", body: JSON.stringify({ id: b.dataset.desfazer, quitada: false }) });
+      carregarCartaoAcumulado();
+    } catch (e) { alert(e.message); }
   }));
 }
 
@@ -705,6 +769,11 @@ $$(".faba").forEach(aba => {
   });
 });
 $("#func-mes").addEventListener("change", carregarMeuMes);
+if ($("#chip-func-pendente")) $("#chip-func-pendente").addEventListener("click", () => {
+  const lista = $("#func-mes-pendente-lista");
+  if (lista) lista.classList.toggle("oculto");
+  $("#chip-func-pendente").classList.toggle("aberto");
+});
 
 async function carregarMeuMes() {
   if (!$("#func-mes").value) $("#func-mes").value = mesAtual();
@@ -715,6 +784,7 @@ async function carregarMeuMes() {
   // O método cartão NÃO muda isso — ele só decide se a comissão do dinheiro sai do cartão.
   let recebido = 0, pendente = 0, dividaDin = 0;
   const porDia = {};
+  const pendentes = [];
   lancs.forEach(l => {
     let recNow = 0;
     if (l.forma === "dinheiro") {
@@ -726,7 +796,7 @@ async function carregarMeuMes() {
     } else {
       // pix e cartão: só contam depois de marcados como pago
       if (l.pago) { recNow = l.valorFuncionaria; recebido += recNow; }
-      else pendente += l.valorFuncionaria;
+      else { pendente += l.valorFuncionaria; pendentes.push(l); }
     }
     if (recNow > 0) {
       const d = porDia[l.data] = porDia[l.data] || { data: l.data, total: 0 };
@@ -734,6 +804,17 @@ async function carregarMeuMes() {
     }
   });
   pendente = Math.max(0, pendente - dividaDin);
+
+  // lista do pendente (só leitura, com comprovantes) — abre ao tocar no chip
+  const contPend = $("#func-mes-pendente-lista");
+  if (contPend) {
+    const nota = dividaDin > 0.005
+      ? `<div class="item-sub" style="padding:8px 6px;color:var(--texto-fraco)">menos comissão do dinheiro que sai do cartão: −${reais(dividaDin)}</div>` : "";
+    contPend.innerHTML = pendentes.length
+      ? pendentes.slice().sort((a, b) => b.data.localeCompare(a.data)).map(itemPendenteHtml).join("") + nota
+      : '<div class="vazio">Nada pendente. 🎉</div>';
+    ligarFotos(contPend);
+  }
   $("#func-mes-recebido").textContent = reais(recebido);
   $("#func-mes-pendente").textContent = reais(pendente);
   const dias = Object.values(porDia).sort((a, b) => b.data.localeCompare(a.data));
